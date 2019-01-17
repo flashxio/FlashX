@@ -66,7 +66,7 @@ namespace {
 
     static barrier::ptr iter_barrier;
     static unsigned g_max_iters;
-    static std::vector<size_t> g_num_members_v;
+    static std::vector<knor::llong_t> g_num_members_v;
     static double g_tolerance;
     static bool g_converged = false;
 
@@ -77,7 +77,7 @@ namespace {
     static std::uniform_real_distribution<double> ur_distribution(0.0, 1.0);
 
     void update_clusters(graph_engine::ptr mat,
-            std::vector<size_t>& num_members_v);
+            std::vector<knor::llong_t>& num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         bool recalculated;
@@ -780,7 +780,7 @@ namespace {
     }
 
     void update_clusters(graph_engine::ptr mat,
-            std::vector<size_t>& num_members_v) {
+            std::vector<knor::llong_t>& num_members_v) {
         clear_clusters();
         std::vector<vertex_program::ptr> kms_clust_progs;
         mat->get_vertex_programs(kms_clust_progs);

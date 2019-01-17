@@ -46,7 +46,7 @@ namespace {
     static std::vector<vertex_id_t> all_vertices;
     static barrier::ptr iter_barrier;
     static unsigned g_max_iters;
-    static std::vector<size_t> g_num_members_v;
+    static std::vector<knor::llong_t> g_num_members_v;
     static double g_tolerance;
     static bool g_converged = false;
     static std::default_random_engine generator;
@@ -54,7 +54,7 @@ namespace {
 
     static unsigned kmeanspp_get_next_cluster_id(graph_engine::ptr mat);
     void update_clusters(graph_engine::ptr mat,
-            std::vector<size_t>& g_num_members_v);
+            std::vector<knor::llong_t>& g_num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         public:
@@ -348,7 +348,7 @@ namespace {
         }
 
         void update_clusters(graph_engine::ptr mat,
-                std::vector<size_t>& g_num_members_v) {
+                std::vector<knor::llong_t>& g_num_members_v) {
             g_clusters->clear();
 
             std::vector<vertex_program::ptr> kms_clust_progs;

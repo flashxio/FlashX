@@ -52,7 +52,7 @@ namespace {
     static std::uniform_real_distribution<double> ur_distribution(0.0, 1.0);
 
     void update_clusters(graph_engine::ptr mat,
-            std::vector<size_t>& num_members_v);
+            std::vector<knor::llong_t>& num_members_v);
     class kmeans_vertex: public base_kmeans_vertex
     {
         std::vector<double> lwr_bnd;
@@ -390,7 +390,7 @@ namespace {
         }
 
         void update_clusters(graph_engine::ptr mat,
-                std::vector<size_t>& num_members_v) {
+                std::vector<knor::llong_t>& num_members_v) {
             clear_clusters();
             std::vector<vertex_program::ptr> kms_clust_progs;
             mat->get_vertex_programs(kms_clust_progs);
@@ -535,7 +535,7 @@ namespace {
                 g_clusters->set_mean(*centers);
 
             FG_vector<unsigned>::ptr cluster_assignments; // Which cluster a sample is in
-            std::vector<size_t> num_members_v(K);
+            std::vector<knor::llong_t> num_members_v(K);
 
             BOOST_LOG_TRIVIAL(info) << "Init of g_cluster_dist";
             // Distance to everyone other than yourself
@@ -727,7 +727,7 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            kbase::print_vector<size_t>(num_members_v);
+            kbase::print_vector(num_members_v);
 
             std::vector<unsigned> mv(NUM_ROWS);
             get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);
