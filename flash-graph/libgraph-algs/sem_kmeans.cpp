@@ -138,7 +138,7 @@ namespace {
                     update_clusters(mat, g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                    kbase::print_vector(g_num_members_v);
+                    kbase::print(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                         << g_num_changed << " **\n";
@@ -587,7 +587,7 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            kbase::print_vector(g_num_members_v);
+            kbase::print(g_num_members_v);
 
             std::vector<unsigned> mv(NUM_ROWS);
             get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);

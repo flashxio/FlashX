@@ -113,7 +113,7 @@ namespace {
 
                     for (; it != pt_data[thd].end(); ++it) {
                         printf("row: %u ==> ", it->first);
-                        kbase::print_vector<T>(it->second);
+                        kbase::print<T>(it->second);
                     }
                 }
             }

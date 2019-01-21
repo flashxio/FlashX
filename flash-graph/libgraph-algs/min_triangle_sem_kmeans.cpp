@@ -193,7 +193,7 @@ namespace {
                     g_clusters->print_means();
 #endif
 
-                    kbase::print_vector(g_num_members_v);
+                    kbase::print(g_num_members_v);
 
                     BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                         << g_num_changed << " **\n";
@@ -747,7 +747,7 @@ namespace {
                 g_clusters->unfinalize(cl);
 #if VERBOSE
                 std::cout << "Unfinalized g_clusters[thd] ==> ";
-                kbase::print_vector<double>(g_clusters[cl]->get_mean());
+                kbase::print<double>(g_clusters[cl]->get_mean());
 #endif
             }
         }
@@ -1106,18 +1106,18 @@ namespace fg
 #if KM_TEST
         g_prune_stats->get_stats();
         BOOST_LOG_TRIVIAL(info) << "\nGBytes requested per iteration: ";
-        kbase::print_vector<double>(g_gb_req_iter, 200);
+        kbase::print<double>(g_gb_req_iter, 200);
 
         std::vector<double> v = per_iter_from_agg_io(g_gb_obt_iter);
         BOOST_LOG_TRIVIAL(info) << "\nGBytes obtained per iteration: ";
-        kbase::print_vector<double>(v, 200);
+        kbase::print<double>(v, 200);
 
         std::vector<size_t> cv = per_iter_from_agg_cache(g_cache_hits_iter);
         BOOST_LOG_TRIVIAL(info) << "\nRow-Cache hits per iteration: ";
-        kbase::print_vector<size_t>(cv, 200);
+        kbase::print<size_t>(cv, 200);
 
         BOOST_LOG_TRIVIAL(info) << "\nActive count per iteration: ";
-        kbase::print_vector<size_t>(acntr->get_active_count_per_iter(), 200);
+        kbase::print<size_t>(acntr->get_active_count_per_iter(), 200);
 #endif
 #if VERBOSE
         ac->write_consolidated("consol_activation_by_iter.csv", NUM_ROWS);
@@ -1143,7 +1143,7 @@ namespace fg
         }
         BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-        kbase::print_vector(g_num_members_v);
+        kbase::print(g_num_members_v);
 
         std::vector<unsigned> mv(NUM_ROWS);
         get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);

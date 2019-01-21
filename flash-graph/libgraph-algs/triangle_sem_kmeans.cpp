@@ -383,7 +383,7 @@ namespace {
                     g_clusters->unfinalize(cl);
 #if VERBOSE
                     std::cout << "Unfinalized g_clusters[thd] ==> ";
-                    kbase::print_vector<double>(g_clusters[cl]->get_mean());
+                    kbase::print<double>(g_clusters[cl]->get_mean());
 #endif
                 }
             }
@@ -645,7 +645,7 @@ namespace {
                 g_cluster_dist->print();
 
                 BOOST_LOG_TRIVIAL(info) << "After Init engine: printing cluster counts:";
-                kbase::print_vector(num_members_v);
+                kbase::print(num_members_v);
 #endif
                 g_prune_init = false; // reset
                 g_num_changed = 0; // reset
@@ -686,7 +686,7 @@ namespace {
 #endif
 
                 BOOST_LOG_TRIVIAL(info) << "Printing cluster counts ...";
-                kbase::print_vector(num_members_v);
+                kbase::print(num_members_v);
 
                 BOOST_LOG_TRIVIAL(info) << "** Samples changes cluster: "
                     << g_num_changed << " **\n";
@@ -727,7 +727,7 @@ namespace {
             }
             BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
-            kbase::print_vector(num_members_v);
+            kbase::print(num_members_v);
 
             std::vector<unsigned> mv(NUM_ROWS);
             get_membership(mat)->copy_to<unsigned>(&mv[0], NUM_ROWS);

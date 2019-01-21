@@ -184,7 +184,7 @@ namespace {
         }
 
         printf("V%u's vector: \n", my_id);
-        kbase::print_vector<std::string>(v);
+        kbase::print<std::string>(v);
     }
 
     std::string s (const double d) {
