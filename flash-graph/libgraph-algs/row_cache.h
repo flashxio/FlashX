@@ -97,14 +97,6 @@ namespace {
                     << this->max_numel << ", numel_sync: " << this->numel_sync;
             }
 
-            static void print_arr(T* arr, unsigned len) {
-                printf("[ ");
-                for (unsigned i = 0; i < len; i++) {
-                    std::cout << arr[i] << " ";
-                }
-                printf("]\n");
-            }
-
             const void print_data_mat() {
                 BOOST_LOG_TRIVIAL(info) << "\nEchoing the per-thread data";
                 for (unsigned thd = 0; thd < this->elem_added.size(); thd++) {
@@ -216,7 +208,7 @@ namespace {
                 for (cache_map_iter it = data_map.begin(); it != data_map.end();
                         ++it) {
                     printf("r:%u ==> ", it->first);
-                    print_arr(it->second, elem_len);
+                    kbase::print(it->second, elem_len);
                 }
             }
 

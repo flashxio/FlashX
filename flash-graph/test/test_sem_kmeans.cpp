@@ -46,7 +46,7 @@ std::vector<double> test_init_g_clusters(const size_t k=4) {
 
     for (size_t cl = 0; cl < k; cl++) {
         printf("c:%lu =>\n", cl);
-        kbase::print_arr(&(v[cl*NCOL]), NCOL);
+        kbase::print(&(v[cl*NCOL]), NCOL);
 
         assert(kbase::eq_all<double>(&v[0], &(g_clusters->get_means()[0]), NCOL*k));
     }
