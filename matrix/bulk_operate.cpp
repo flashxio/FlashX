@@ -84,7 +84,7 @@ class basic_uops_impl: public basic_uops
 			return "abs";
 		}
 		OutType operator()(const InType &e) const {
-			return (OutType) std::abs(e);
+            return e < 0 ?  ((OutType) -e) : ((OutType) e);
 		}
 	};
 
