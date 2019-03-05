@@ -42,7 +42,7 @@ namespace fg
 
 /**
   * \brief A user-friendly wrapper for FlashGraph's raw graph type.
-  *         Very usefule when when utilizing FlashGraph 
+  *         Very usefule when when utilizing FlashGraph
   *         pre-written/library algorithms.
   *
 */
@@ -72,7 +72,7 @@ public:
 	/**
 	 * \brief  Method to instantiate a graph object.
 	 *         This method is used in lieu of explicitly calling a ctor.
-	 *    
+	 *
 	 * \param graph_file Path to the graph file in SAFS or in Linux filesystem.
 	 * \param index_file Path to the graph index file in SAFS or
 	 *        in Linux filesystem.
@@ -84,7 +84,7 @@ public:
 	/**
 	 * \brief  Method to instantiate a graph object.
 	 *         This method is used in lieu of explicitly calling a ctor.
-	 *    
+	 *
 	 * \param graph_data The adjacency lists of the graph stored in memory.
 	 * \param index_data The index of the graph stored in memory.
 	 * \param graph_name The name of the graph.
@@ -99,9 +99,9 @@ public:
 	std::shared_ptr<safs::file_io_factory> get_graph_io_factory(int access_option);
 
 /**
-  * \brief Get the map that contains the runtime configurations 
+  * \brief Get the map that contains the runtime configurations
   *        for FlashGraph.
-  * 
+  *
   * \return The config_map that contains all FlashGraph configurations.
   *
 */
@@ -141,22 +141,22 @@ public:
 
 /**
   * \brief Triangle computation type.
-  *         
-  * - CYCLE triangles are defined for directed graphs and 
+  *
+  * - CYCLE triangles are defined for directed graphs and
   *         depend on the direction of each edge. All edges must be
   *         head to tail connections.
   *     E.g A -----> B
   *         ^     /
   *         |   /
   *         | v
-  *         C  
-  *                
-  * - ALL triangles. Edge direction is disregarded. 
+  *         C
+  *
+  * - ALL triangles. Edge direction is disregarded.
   *     E.g A ----- B
   *         |     /
   *         |   /
   *         | /
-  *         C  
+  *         C
   */
 enum directed_triangle_type
 {
@@ -223,7 +223,7 @@ fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type);
 /**
   * \brief Compute undirected triangle count for each vertex.
-  * 
+  *
   * \param fg The FlashGraph graph object for which you want to compute.
   * \return A vector that contains the number of triangles associated with
   *         each vertex in the graph.
@@ -232,9 +232,9 @@ fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg);
 
 /**
-  * \brief Compute the per-vertex local Scan Statistic 
+  * \brief Compute the per-vertex local Scan Statistic
   * \param fg The FlashGraph graph object for which you want to compute.
-  * \return A vector with an entry for each vertex in the graph's 
+  * \return A vector with an entry for each vertex in the graph's
   *          local scan value.
   *
 */
@@ -242,11 +242,11 @@ fm::vector::ptr compute_local_scan(FG_graph::ptr);
 fm::vector::ptr compute_local_scan2(FG_graph::ptr fg);
 
 /**
-  * \brief Obtain the top K vertices with the largest local Scan 
-  *     Statistic value. 
+  * \brief Obtain the top K vertices with the largest local Scan
+  *     Statistic value.
   * \param fg The FlashGraph graph object for which you want to compute.
-  * \param topK The value for K used for the `top K` vertices.  
-  * \return A vector of std::pair with an entry for each vertex 
+  * \param topK The value for K used for the `top K` vertices.
+  * \return A vector of std::pair with an entry for each vertex
   *         in the top K together with its value.
   *
 */
@@ -254,7 +254,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr, size_t topK);
 
 /**
-  * \brief Compute the diameter estimation for a graph. 
+  * \brief Compute the diameter estimation for a graph.
   * \param fg The FlashGraph graph object for which you want to compute.
   * \return The diameter estimate value.
   *
@@ -297,7 +297,7 @@ fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
 
 /**
- * \brief Compute the k-core/coreness of a graph. The algorithm will 
+ * \brief Compute the k-core/coreness of a graph. The algorithm will
  *        determine which vertices are between core `k` and `kmax` --
  *        all other vertices will be assigned to core 0.
  * \param fg The FlashGraph graph object for which you want to compute.
@@ -308,7 +308,8 @@ fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
  * \return An `FG_vector` containing the core of each vertex between `k`
  *         and `kmax`. All other vertices are assigned to core 0.
  */
-fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0);
+fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0,
+        bool skip=true);
 
 /**
  * \brief Get the degree of all vertices in the graph.

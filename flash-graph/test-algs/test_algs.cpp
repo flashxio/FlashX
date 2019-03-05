@@ -526,9 +526,9 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 	int num_opts = 0;
 	size_t kmax = 0;
 	size_t k = 2;
-	std::string write_out = "";
+    bool skips = true;
 
-	while ((opt = getopt(argc, argv, "k:m:w:")) != -1) {
+	while ((opt = getopt(argc, argv, "dk:m:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -539,8 +539,8 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 				kmax = atol(optarg);
 				num_opts++;
 				break;
-			case 'w':
-				write_out = optarg;
+			case 'd':
+				skips = false;
 				break;
 			default:
 				print_usage();
@@ -553,9 +553,7 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 		exit(-1);
 	}
 
-	fm::vector::ptr kcorev = compute_kcore(graph, k, kmax);
-//	if (!write_out.empty() && kcorev)
-//		kcorev->to_file(write_out);
+	fm::vector::ptr kcorev = compute_kcore(graph, k, kmax, skips);
 }
 
 void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
@@ -873,7 +871,7 @@ void print_usage()
 	fprintf(stderr, "kcore\n");
 	fprintf(stderr, "-k k: the minimum k value to compute\n");
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
-	fprintf(stderr, "-w output: the file name for a vector written to file\n");
+	fprintf(stderr, "-d dskip: disable skipping optimizatin\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "betweenness\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");

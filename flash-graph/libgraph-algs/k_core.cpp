@@ -33,7 +33,7 @@
 using namespace fg;
 
 vsize_t CURRENT_K; // Min degree necessary to be part of the k-core graph
-vsize_t PREVIOUS_K; 
+vsize_t PREVIOUS_K;
 bool all_greater_than_core = true;
 
 enum kcore_stage_t
@@ -47,7 +47,7 @@ class kcore_vertex: public compute_vertex
 {
 	bool deleted;
 	vsize_t core;
-	vsize_t degree; 
+	vsize_t degree;
 
 	public:
 	kcore_vertex(vertex_id_t id): compute_vertex(id) {
@@ -84,7 +84,7 @@ class kcore_vertex: public compute_vertex
 
 	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(vertex_program &prog, const vertex_message &msg); 
+	void run_on_message(vertex_program &prog, const vertex_message &msg);
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
 		degree = header.get_num_edges();
@@ -103,13 +103,13 @@ class deleted_message: public vertex_message
 		}
 };
 
-void multicast_delete_msg(vertex_program &prog, 
+void multicast_delete_msg(vertex_program &prog,
 		const page_vertex &vertex, edge_type E)
 {
 	int num_dests = vertex.get_num_edges(E);
 	edge_seq_iterator it = vertex.get_neigh_seq_it(E, 0, num_dests);
 
-	// Doesn't matter who sent it, just --degree on reception 
+	// Doesn't matter who sent it, just --degree on reception
 	deleted_message msg;
 	prog.multicast_msg(it, msg);
 }
@@ -121,8 +121,8 @@ void kcore_vertex::run(vertex_program &prog) {
 		return;
 	}
 
-	if ( degree > CURRENT_K ) { 
-		return; 
+	if ( degree > CURRENT_K ) {
+		return;
 	}
 
 	if (!is_deleted()) {
@@ -143,7 +143,7 @@ void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 		set_core(CURRENT_K - 1); // This is true because you must make it past CURRENT_K-1 to be here
 		_delete();
 
-		// Send two multicast messages - [IN_EDGE, OUT_EDGE] 
+		// Send two multicast messages - [IN_EDGE, OUT_EDGE]
 		multicast_delete_msg(prog, vertex, IN_EDGE);
 		multicast_delete_msg(prog, vertex, OUT_EDGE);
 	}
@@ -266,7 +266,7 @@ void set_kmax(graph_engine::ptr graph, size_t& kmax)
 {
 	BOOST_LOG_TRIVIAL(info) << "Computing kmax as max_degree ...";
 	vertex_query::ptr mdq(new max_degree_query());
-	graph->query_on_all(mdq); 
+	graph->query_on_all(mdq);
 	kmax = ((max_degree_query *) mdq.get())->get_max_degree();
 }
 
@@ -285,7 +285,8 @@ class activate_k_filter: public vertex_filter {
 namespace fg
 {
 
-fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
+fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
+        bool skip)
 {
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(
 			fg->get_graph_header());
@@ -303,28 +304,31 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
 	CURRENT_K = k;
 	BOOST_LOG_TRIVIAL(info) << "Running the init degree stage ...";
 	stage = INIT_DEGREE;
-	graph->start_all(); 
+	graph->start_all();
 	graph->wait4complete();
 	stage = KCORE;
+    long skip_count = 0;
 
 	if (kmax == 0 && k != 0) {
 		set_kmax(graph, kmax);
 	}
 	BOOST_LOG_TRIVIAL(info) << "Setting kmax as " << kmax;
 
-
 	for (; CURRENT_K <= kmax; CURRENT_K++) {
 
 		std::shared_ptr<vertex_filter> filter
 			= std::shared_ptr<vertex_filter>(new activate_k_filter(CURRENT_K));
 
-		graph->start(filter, vertex_program_creater::ptr()); 
+		graph->start(filter, vertex_program_creater::ptr());
 		graph->wait4complete();
 
-		if (all_greater_than_core) { // There's a chance we can hop forward
+#if 1
+        // There's a chance we can hop forward
+		if (skip && all_greater_than_core) {
 			vertex_query::ptr mdq(new min_degree_query());
 			graph->query_on_all(mdq);
-			vsize_t min_degree_remaining = ((min_degree_query *) mdq.get())->get_min_degree();
+			vsize_t min_degree_remaining =
+                ((min_degree_query *) mdq.get())->get_min_degree();
 
 			if (min_degree_remaining == std::numeric_limits<vsize_t>::max()) {
 				BOOST_LOG_TRIVIAL(info) << "No more active vertices left!";
@@ -332,18 +336,22 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
 			}
 
 			BOOST_LOG_TRIVIAL(info)
-				<< "The graphs minimum degree remaining is " << min_degree_remaining;
-			// Effectively jumps us to the CURRENT_K + 1th core
+				<< "The graphs minimum degree remaining is "
+                << min_degree_remaining;
+            // Effectively jumps us to the CURRENT_K + 1th core
+            skip_count += min_degree_remaining - CURRENT_K;
 			CURRENT_K = min_degree_remaining; // NOTE: Careful - messing with the loop variable :/
 
 			if (CURRENT_K > kmax) {
+                skip_count -= CURRENT_K-kmax;
 				BOOST_LOG_TRIVIAL(info) << "Terminating computation at kmax";
 				break;
 			}
 		}
 		all_greater_than_core = true;
+#endif
 
-#if 1
+#if 0
 		vertex_query::ptr cvq(new count_vertex_query());
 		graph->query_on_all(cvq);
 		size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
@@ -357,6 +365,8 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax)
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("K-core took %1% sec to complete") % time_diff(start, end);
+    BOOST_LOG_TRIVIAL(info)
+        << boost::format("\n%1% k values skipped\n") % skip_count;
 
 	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
 			fg->get_num_vertices(), safs::params.get_num_nodes(),
