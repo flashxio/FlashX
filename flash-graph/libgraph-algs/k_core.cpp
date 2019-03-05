@@ -351,7 +351,7 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 		all_greater_than_core = true;
 #endif
 
-#if 0
+#if 1
 		vertex_query::ptr cvq(new count_vertex_query());
 		graph->query_on_all(cvq);
 		size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
@@ -364,9 +364,9 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("K-core took %1% sec to complete") % time_diff(start, end);
-    BOOST_LOG_TRIVIAL(info)
-        << boost::format("\n%1% k values skipped\n") % skip_count;
+		<< boost::format("K-core took %1% sec to complete with %2% k skips\n") %
+        time_diff(start, end) % skip_count;
+
 
 	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
 			fg->get_num_vertices(), safs::params.get_num_nodes(),
