@@ -32,7 +32,7 @@ using namespace fg;
 namespace {
 
 float DAMPING_FACTOR = 0.85;
-float TOLERANCE = 1.0E-2; 
+float TOLERANCE = 1.0E-2;
 int max_num_iters = INT_MAX;
 
 /*
@@ -75,7 +75,7 @@ public:
 
 	void run_on_message(vertex_program &,
 /* Only serves to activate on the next iteration */
-			const vertex_message &msg) { }; 
+			const vertex_message &msg) { };
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
 		assert(prog.get_vertex_id(*this) == header.get_id());
@@ -102,13 +102,13 @@ void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
   edge_iterator end_it = vertex.get_neigh_end(IN_EDGE);
-  
+
   for (edge_iterator it = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
     pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank
-    accum += (v.get_curr_itr_pr()/v.get_num_out_edges()); 
-  }   
+    accum += (v.get_curr_itr_pr()/v.get_num_out_edges());
+  }
 
   // Apply
   float last_change = 0;
@@ -116,15 +116,15 @@ void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
     float new_pr = ((1 - DAMPING_FACTOR)) + (DAMPING_FACTOR*(accum));
     last_change = new_pr - curr_itr_pr;
     curr_itr_pr = new_pr;
-  }   
-  
-  // Scatter (activate your out-neighbors ... if you have any :) 
+  }
+
+  // Scatter (activate your out-neighbors ... if you have any :)
   if ( std::fabs( last_change ) > TOLERANCE ) {
 	int num_dests = vertex.get_num_edges(OUT_EDGE);
     if (num_dests > 0) {
 		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
 		prog.activate_vertices(it) ;
-    }   
+    }
   }
 }
 
@@ -156,7 +156,7 @@ public:
 		return new_pr;
 	}
 
-	void run(vertex_program &prog) { 
+	void run(vertex_program &prog) {
 		// We perform pagerank for at most `max_num_iters' iterations.
 		if (prog.get_graph().get_curr_level() >= max_num_iters)
 			return;
@@ -230,10 +230,10 @@ fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	pr_stage = pr_stage_t::INIT;
-	graph->start_all(); 
+	graph->start_all();
 	graph->wait4complete();
 	pr_stage = pr_stage_t::RUN;
-	graph->start_all(); 
+	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
@@ -286,7 +286,7 @@ fm::vector::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start_all(); 
+	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 

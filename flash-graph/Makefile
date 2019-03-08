@@ -34,17 +34,11 @@ tools: libgraph
 unit-test: libgraph
 	$(MAKE) -C unit-test
 
-test: libgraph
-	$(MAKE) -C test
-
 matrix: libgraph
 	$(MAKE) -C matrix
 
 test-algs: libgraph libgraph-algs matrix
 	$(MAKE) -C test-algs
-
-test-matrix: libgraph matrix
-	$(MAKE) -C test-matrix
 
 utils: libgraph libgraph-algs
 	$(MAKE) -C utils
@@ -57,11 +51,10 @@ clean:
 	find -name core -delete
 	$(MAKE) clean -C tools
 	$(MAKE) clean -C unit-test
-	$(MAKE) clean -C test
 	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
 	$(MAKE) clean -C utils
 	$(MAKE) clean -C test-matrix
 
--include $(DEPS) 
+-include $(DEPS)
