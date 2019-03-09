@@ -679,6 +679,7 @@ void EM_vec_store::reset_data()
 vec_store::ptr EM_vec_store::sort_with_index()
 {
 	assert(0);
+    return nullptr;
 }
 
 std::vector<safs::io_interface::ptr> EM_vec_store::create_ios() const
@@ -1314,13 +1315,14 @@ std::vector<EM_vec_store::ptr> sort(
 	size_t anchor_gap_size = sizes.second;
 	printf("sort buf size: %ld, anchor gap size: %ld\n", sort_buf_size,
 			anchor_gap_size);
+#ifdef NDEBUG
 	for (size_t i = 0; i < vecs.size(); i++) {
-		size_t num_sort_bufs
-			= ceil(((double) vecs[i]->get_length()) / sort_buf_size);
 		// We have to make sure the sort buffer can contain a anchor portion
 		// from each partially sorted buffer.
-		assert(num_sort_bufs * anchor_gap_size <= sort_buf_size);
+		assert(ceil(((double) vecs[i]->get_length()) / sort_buf_size) *
+                anchor_gap_size <= sort_buf_size);
 	}
+#endif
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -1369,12 +1371,12 @@ void EM_vec_store::sort()
 		= EM_sort_detail::cal_sort_buf_size(get_type(), get_length());
 	size_t sort_buf_size = sizes.first;
 	size_t anchor_gap_size = sizes.second;
-	size_t num_sort_bufs = ceil(((double) get_length()) / sort_buf_size);
 	printf("sort buf size: %ld, anchor gap size: %ld\n", sort_buf_size,
 			anchor_gap_size);
 	// We have to make sure the sort buffer can contain a anchor portion
 	// from each partially sorted buffer.
-	assert(num_sort_bufs * anchor_gap_size <= sort_buf_size);
+	assert(ceil(((double) get_length()) / sort_buf_size) * anchor_gap_size
+            <= sort_buf_size);
 
 	/*
 	 * Divide the vector into multiple large parts and sort each part in parallel.
@@ -1606,8 +1608,7 @@ matrix_store::ptr EM_vec_store::conv2mat(size_t nrow, size_t ncol,
 	new (header_buf.data()) matrix_header(matrix_type::DENSE,
 			get_type().get_size(), nrow, ncol, layout, get_type().get_type());
 	safs::safs_file f(safs::get_sys_RAID_conf(), holder->get_name());
-	bool ret = f.set_user_metadata(header_buf);
-	assert(ret);
+	assert(f.set_user_metadata(header_buf));
 	return EM_matrix_store::create(holder, ios, nrow, ncol, layout, get_type());
 }
 

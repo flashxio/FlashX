@@ -36,7 +36,7 @@ namespace safs
 
 const int MAX_EMBED_BUFS = 64;
 
-/* 
+/*
  * each file gets the same number of outstanding requests.
  */
 #ifdef EVEN_DISTRIBUTE
@@ -197,7 +197,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 		tcb->vec.resize(num_bufs);
 		BOOST_VERIFY(tcb->req.get_vec(tcb->vec.data(), num_bufs) == num_bufs);
 		struct iocb *req = ctx->make_iovec_request(io.get_fd(tcb->req.get_offset()),
-				/* 
+				/*
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored
 				 * in the callback structure.
@@ -413,6 +413,6 @@ void async_io::flush_requests()
 {
 }
 
-const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
+//const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
 
 }

@@ -574,16 +574,19 @@ static void inner_prod_tall_row(const local_row_matrix_store &m1,
 	std::vector<const char *> m1_rows;
 	size_t m1_num_rows = m1.get_all_rows(m1_rows);
 	assert(m1_num_rows > 0);
+    m1_num_rows = 0; // Silence compiler
 
 	// Get all cols in m2.
 	std::vector<const char *> m2_cols;
 	size_t m2_num_cols = m2.get_all_cols(m2_cols);
 	assert(m2_num_cols > 0);
+    m2_num_cols = 0; // Silence compiler
 
 	if (res.store_layout() == matrix_layout_t::L_ROW) {
 		std::vector<char *> res_rows;
 		size_t res_num_rows = res.get_all_rows(res_rows);
 		assert(res_num_rows > 0);
+        res_num_rows = 0; // Silence compiler
 
 		for (size_t i = 0; i < nrow; i++) {
 			for (size_t j = 0; j < m2.get_num_cols(); j++) {
@@ -597,6 +600,7 @@ static void inner_prod_tall_row(const local_row_matrix_store &m1,
 		std::vector<char *> res_cols;
 		size_t res_num_cols = res.get_all_rows(res_cols);
 		assert(res_num_cols > 0);
+        res_num_cols = 0; // Silence compiler
 
 		for (size_t i = 0; i < nrow; i++) {
 			for (size_t j = 0; j < m2.get_num_cols(); j++) {
@@ -2273,10 +2277,9 @@ void matrix_wide_multiply(const local_matrix_store &left,
 void materialize_tall(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins)
 {
-	size_t orig_num_rows = ins[0]->get_num_rows();
 	// We need all tall matrices have the same number of rows.
 	for (size_t i = 1; i < ins.size(); i++)
-		assert(ins[i]->get_num_rows() == orig_num_rows);
+		assert(ins[i]->get_num_rows() == ins[0]->get_num_rows());
 
 	// Most of the matrices materialized here are sink matrices.
 	// When materializing these matrices, the corresponding computation
@@ -2291,10 +2294,12 @@ void materialize_tall(
 void materialize_wide(
 		const std::vector<detail::local_matrix_store::const_ptr> &ins)
 {
+#ifndef NDEBUG
 	size_t orig_num_cols = ins[0]->get_num_cols();
 	// We need all wide matrices have the same number of cols.
 	for (size_t i = 1; i < ins.size(); i++)
 		assert(ins[i]->get_num_cols() == orig_num_cols);
+#endif
 
 	// For the reason as above.
 	for (size_t i = 0; i < ins.size(); i++)

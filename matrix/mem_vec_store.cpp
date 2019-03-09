@@ -151,9 +151,8 @@ bool smp_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator vec
 		assert(loc + (*it)->get_length() <= this->get_length());
 		assert((*it)->is_in_mem());
 		const mem_vec_store &mem_vec = static_cast<const mem_vec_store &>(**it);
-		bool ret = data.set_sub_arr(loc * get_entry_size(),
-				mem_vec.get_raw_arr(), mem_vec.get_length() * get_entry_size());
-		assert(ret);
+		assert(data.set_sub_arr(loc * get_entry_size(),
+				mem_vec.get_raw_arr(), mem_vec.get_length() * get_entry_size()));
 		loc += (*it)->get_length();
 	}
 	return true;

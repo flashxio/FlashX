@@ -697,8 +697,8 @@ void sparse_self_vertex_compute::run_both_vertices(vertex_id_t start_vid,
 bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 {
 	assert(start_vid == get_first_vertex());
-	assert(get_last_vertex() - get_first_vertex() + 1
-			== it.get_num_vertices());
+	assert((size_t)get_last_vertex() - get_first_vertex() + 1
+			== (size_t)it.get_num_vertices());
 	// If #ragnes is 1, we'll do it in the dense_self_vertex_compute.
 	assert(num_ranges > 1);
 

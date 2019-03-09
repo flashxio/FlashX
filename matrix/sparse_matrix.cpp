@@ -251,16 +251,19 @@ block_compute_task::~block_compute_task()
 void block_compute_task::run(char *buf, size_t size)
 {
 	off_t orig_off = io.get_loc().get_offset();
-	off_t local_off = orig_off - ROUND_PAGE(orig_off);
-	assert(local_off + io.get_size() <= size);
+	assert((orig_off - ROUND_PAGE(orig_off)) + io.get_size() <= size);
+#ifndef NDEBUG
 	size_t block_row_start
 		= io.get_top_left().get_row_idx() / block_size.get_num_rows();
+#endif
 	size_t num_block_rows
 		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
 	assert(io.get_top_left().get_col_idx() == 0);
+#ifndef NDEBUG
 	size_t block_col_start = 0;
 	size_t num_block_cols
 		= ceil(((double) io.get_num_cols()) / block_size.get_num_cols());
+#endif
 
 	// We access data in super blocks.
 	// A super block is a set of blocks organized in a square or
@@ -329,7 +332,7 @@ block_spmm_task::block_spmm_task(row_portions::ptr in_row_portions,
 char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
 {
 	// out_part only needs to be initialized once because a task only
-	// runs on certain block rows. 
+	// runs on certain block rows.
 	size_t block_row_start = get_io().get_top_left().get_row_idx();
 	size_t block_num_rows = std::min(get_io().get_num_rows(),
 			output.get_num_rows() - block_row_start);

@@ -232,8 +232,8 @@ void direct_comp_io::complete_req(const io_request &req)
 	// When an I/O request is complete, we need to invoke the user task.
 	orig_comp_request *orig = (orig_comp_request *) req.get_user_data();
 	assert(orig);
-	assert(orig->get_offset() + orig->get_size()
-			<= req.get_offset() + req.get_size());
+	assert((size_t)(orig->get_offset() + orig->get_size())
+			<= (size_t)(req.get_offset() + req.get_size()));
 	// We pass the ownership of the memory buffer to the byte array.
 	// The byte array will free the buffer once it's done.
 	direct_byte_array arr(orig->get_offset(), orig->get_size(), req.get_buf(),

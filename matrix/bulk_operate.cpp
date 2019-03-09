@@ -1077,8 +1077,7 @@ private:
 				addr = new rand_gen_wrapper(type.create_randu_gen(*var1, *var2));
 			else
 				assert(0);
-			int ret = pthread_setspecific(gen_key, addr);
-			assert(ret == 0);
+			assert(pthread_setspecific(gen_key, addr) == 0);
 		}
 		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) addr;
 		return wrapper->get_gen();
@@ -1094,9 +1093,8 @@ public:
 			rand_dist_type rand_dist): type(var1->get_type()) {
 		this->var1 = var1;
 		this->var2 = var2;
-		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
+		assert(pthread_key_create(&gen_key, destroy_rand_gen) == 0);
 		this->rand_dist = rand_dist;
-		assert(ret == 0);
 	}
 
 	~rand_init() {

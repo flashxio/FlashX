@@ -35,7 +35,9 @@ static const size_t MAT_CHUNK_SIZE_LOG = 30;
 
 void sparse_block_2d::verify(const block_2d_size &block_size) const
 {
+#ifndef NDEBUG
 	size_t rel_row_id = 0;
+#endif
 	size_t num_rows = 0;
 	if (has_rparts()) {
 		rp_edge_iterator it = get_first_edge_iterator();
@@ -128,11 +130,13 @@ void sparse_block_2d::finalize(const char *data, size_t num_bytes)
 void SpM_2d_index::verify() const
 {
 	header.verify();
+#ifndef NDEBUG
 	off_t off = offs[0];
 	for (size_t i = 1; i < get_num_entries(); i++) {
 		assert(off < offs[i]);
 		off = offs[i];
 	}
+#endif
 }
 
 SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,
@@ -150,7 +154,7 @@ SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,
 		return SpM_2d_index::ptr();
 	}
 	SpM_2d_index *idx = new (buf) SpM_2d_index(header);
-	for (size_t i = 0; i < offs.size(); i++) 
+	for (size_t i = 0; i < offs.size(); i++)
 		idx->offs[i] = offs[i];
 	return SpM_2d_index::ptr(idx, deleter());
 }
@@ -184,8 +188,7 @@ void SpM_2d_index::safs_dump(const std::string &file) const
 {
 	size_t size = get_size(get_num_entries());
 	safs::safs_file f(safs::get_sys_RAID_conf(), file);
-	bool ret = f.create_file(size);
-	assert(ret);
+    assert(f.create_file(size));
 
 	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
 			file, safs::REMOTE_ACCESS);
@@ -388,8 +391,7 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 		off_t off = index->get_block_row_off(i);
 		size_t size = index->get_block_row_off(i + 1) - index->get_block_row_off(i);
 		void *data = malloc(size);
-		int seek_ret = fseek(f, off, SEEK_SET);
-		assert(seek_ret == 0);
+		assert(fseek(f, off, SEEK_SET) == 0);
 		size_t ret = fread(data, size, 1, f);
 		if (ret == 0) {
 			BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")

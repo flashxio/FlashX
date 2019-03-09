@@ -100,6 +100,7 @@ namespace {
         return  dist;
     }
 
+#if 0
     /**
       * \Internal
       * \brief compute the cosine distance between two arrays
@@ -123,6 +124,7 @@ namespace {
         }
         return  1 - (numr / ((sqrt(ldenom)*sqrt(rdenom))));
     }
+#endif
 
     // TODO: Doc
 #if KM_ENABLE_DIST_TYPE

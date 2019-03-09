@@ -138,13 +138,13 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(
 		size_t range_size = mapper->get_range_size();
 		if (is_wide()) {
 			node_id = mapper->map2physical(start_col).first;
-			assert(ROUND(start_col, range_size)
-					== ROUND(start_col + num_cols - 1, range_size));
+			assert((size_t)ROUND(start_col, range_size)
+					== (size_t)ROUND(start_col + num_cols - 1, range_size));
 		}
 		else {
 			node_id = mapper->map2physical(start_row).first;
-			assert(ROUND(start_row, range_size)
-					== ROUND(start_row + num_rows - 1, range_size));
+			assert((size_t)ROUND(start_row, range_size)
+					== (size_t)ROUND(start_row + num_rows - 1, range_size));
 		}
 		buf = portion_bufs[node_id].get_raw();
 	}

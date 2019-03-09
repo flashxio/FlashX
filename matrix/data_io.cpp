@@ -360,13 +360,11 @@ std::shared_ptr<char> local_file_io::read_bytes(
 	off_t align_start = ROUND_PAGE(curr_off);
 	off_t align_end = ROUNDUP_PAGE(curr_off + wanted_bytes);
 	off_t local_off = curr_off - align_start;
-	off_t seek_ret = lseek(fd, align_start, SEEK_SET);
-	assert(seek_ret >= 0);
+	assert(lseek(fd, align_start, SEEK_SET)  >= 0);
 
 	size_t buf_size = align_end - align_start;
 	void *addr = NULL;
-	int alloc_ret = posix_memalign(&addr, PAGE_SIZE, buf_size);
-	assert(alloc_ret == 0);
+	assert(posix_memalign(&addr, PAGE_SIZE, buf_size) == 0);
 
 	assert(file_size > align_start);
 	size_t expected_size = std::min(buf_size, (size_t) (file_size - align_start));

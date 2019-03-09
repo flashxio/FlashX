@@ -160,6 +160,7 @@ public:
 
 	virtual detail::vec_store::ptr sort_with_index() {
 		assert(0);
+        return nullptr;
 	}
 	virtual void sort() {
 		assert(0);
@@ -171,6 +172,7 @@ public:
 	virtual std::shared_ptr<const detail::matrix_store> conv2mat(
 			size_t nrow, size_t ncol, bool byrow) const {
 		assert(0);
+        return nullptr;
 	}
 
 	local_vec_store::ptr get(std::vector<off_t> &idxs) const;

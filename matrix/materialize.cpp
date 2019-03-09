@@ -100,13 +100,13 @@ void mapply_task::run()
 			mats.size());
 	std::vector<detail::local_matrix_store::ptr> local_out_stores(
 			out_mats.size());
-	int node_id = thread::get_curr_thread()->get_node_id();
 	for (size_t j = 0; j < mats.size(); j++) {
 		local_stores[j] = mats[j]->get_portion(portion_idx);
 #ifdef MATRIX_DEBUG
 		if (local_stores[j] && local_stores[j]->get_node_id() >= 0
 				&& !one_portion)
-			assert(node_id == local_stores[j]->get_node_id());
+			assert(thread::get_curr_thread()->get_node_id() ==
+                    local_stores[j]->get_node_id());
 #endif
 	}
 	for (size_t j = 0; j < out_mats.size(); j++) {
@@ -114,7 +114,8 @@ void mapply_task::run()
 #ifdef MATRIX_DEBUG
 		if (local_out_stores[j] && local_out_stores[j]->get_node_id() >= 0
 				&& !one_portion)
-			assert(node_id == local_out_stores[j]->get_node_id());
+			assert(thread::get_curr_thread()->get_node_id() ==
+                    local_out_stores[j]->get_node_id());
 #endif
 	}
 

@@ -271,8 +271,8 @@ bool NUMA_row_tall_matrix_store::get_portion_check(size_t start_row,
 
 	// The retrieved rows have to be stored contiguously.
 	size_t range_size = mapper.get_range_size();
-	if (ROUND(start_row, range_size)
-			!= ROUND(start_row + num_rows - 1, range_size)) {
+	if ((size_t)ROUND(start_row, range_size)
+			!= (size_t)ROUND(start_row + num_rows - 1, range_size)) {
 		BOOST_LOG_TRIVIAL(error) << "data isn't in the same range";
 		return false;
 	}

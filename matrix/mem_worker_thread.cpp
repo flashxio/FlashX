@@ -179,18 +179,19 @@ void io_worker_task::run()
 	while (dispatch->issue_task())
 		safs::wait4ios(select, max_pending_ios);
 	// Test if all I/O instances have processed all requests.
-	size_t num_pending = safs::wait4ios(select, 0);
-	assert(num_pending == 0);
+	assert(safs::wait4ios(select, 0) == 0);
 
 	pthread_spin_lock(&lock);
 	EM_objs.clear();
 	pthread_spin_unlock(&lock);
 
+#ifndef NDEBUG
 	for (size_t i = 0; i < ios.size(); i++) {
 		portion_callback &cb = static_cast<portion_callback &>(
 				ios[i]->get_callback());
 		assert(!cb.has_callback());
 	}
+#endif
 }
 
 global_counter::global_counter()
