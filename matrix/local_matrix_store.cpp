@@ -572,21 +572,15 @@ static void inner_prod_tall_row(const local_row_matrix_store &m1,
 
 	// Get all rows in m1.
 	std::vector<const char *> m1_rows;
-	size_t m1_num_rows = m1.get_all_rows(m1_rows);
-	assert(m1_num_rows > 0);
-    m1_num_rows = 0; // Silence compiler
+	assert(m1.get_all_rows(m1_rows) > 0);
 
 	// Get all cols in m2.
 	std::vector<const char *> m2_cols;
-	size_t m2_num_cols = m2.get_all_cols(m2_cols);
-	assert(m2_num_cols > 0);
-    m2_num_cols = 0; // Silence compiler
+	assert(m2.get_all_cols(m2_cols) > 0);
 
 	if (res.store_layout() == matrix_layout_t::L_ROW) {
 		std::vector<char *> res_rows;
-		size_t res_num_rows = res.get_all_rows(res_rows);
-		assert(res_num_rows > 0);
-        res_num_rows = 0; // Silence compiler
+		assert(res.get_all_rows(res_rows) > 0);
 
 		for (size_t i = 0; i < nrow; i++) {
 			for (size_t j = 0; j < m2.get_num_cols(); j++) {
@@ -598,9 +592,7 @@ static void inner_prod_tall_row(const local_row_matrix_store &m1,
 	}
 	else {
 		std::vector<char *> res_cols;
-		size_t res_num_cols = res.get_all_rows(res_cols);
-		assert(res_num_cols > 0);
-        res_num_cols = 0; // Silence compiler
+		assert(res.get_all_rows(res_cols) > 0);
 
 		for (size_t i = 0; i < nrow; i++) {
 			for (size_t j = 0; j < m2.get_num_cols(); j++) {

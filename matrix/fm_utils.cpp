@@ -347,7 +347,11 @@ void SpM_apply_operate::run_blocks(const void *key, const local_vv_store &val,
 			out.resize(sizeof(sparse_block_2d));
 		sparse_block_2d *block = new (out.get_raw_arr()) sparse_block_2d(
 					block_row_id, 0);
-		assert(block->is_empty());
+
+        if (!block->is_empty()) {
+            assert(block->is_empty());
+        }
+
 		return;
 	}
 

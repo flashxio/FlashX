@@ -93,7 +93,9 @@ std::shared_ptr<char> local_mem_buffer::_alloc(size_t num_bytes)
 
 		void *addr = NULL;
 		int alloc_ret = posix_memalign(&addr, PAGE_SIZE, num_bytes);
-		assert(alloc_ret == 0);
+        if (alloc_ret) {
+            assert(alloc_ret == 0);
+        }
 		// When the piece of memory is deallocated, it'll be pushed back to
 		// the deque.
 		ret = std::shared_ptr<char>((char *) addr, local_deleter(*q));

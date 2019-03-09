@@ -290,12 +290,14 @@ bool NUMA_vec_store::append(std::vector<vec_store::const_ptr>::const_iterator ve
 {
 	// TODO
 	assert(0);
+    return false;
 }
 
 bool NUMA_vec_store::append(const vec_store &vec)
 {
 	// TODO
 	assert(0);
+    return false;
 }
 
 namespace
@@ -395,12 +397,14 @@ vec_store::ptr NUMA_vec_store::sort_with_index()
 	assert(!is_sub_vec());
 	// TODO
 	assert(0);
+    return nullptr;
 }
 
 bool NUMA_vec_store::is_sorted() const
 {
 	// TODO
 	assert(0);
+    return false;
 }
 
 vec_store::ptr NUMA_vec_store::deep_copy() const

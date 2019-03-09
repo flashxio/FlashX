@@ -138,7 +138,7 @@ void remote_io::cleanup()
 			num += senders[i]->get_queue()->get_num_entries();
 			num += low_prio_senders[i]->get_queue()->get_num_entries();
 		}
-		/* 
+		/*
 		 * if there are still messages in the queue, wait.
 		 * this might be the best I can do right now
 		 * unless the queues can notify me when they are
@@ -209,7 +209,9 @@ void remote_io::access(io_request *requests, int num,
 			else {
 				ret = low_prio_senders[idx]->send_cached(&requests[i]);
 			}
-			assert(ret == 1);
+            if (ret != 1) {
+                assert(ret == 1);
+            }
 		}
 		else {
 			// If the request accesses multiple RAID blocks, we have to
@@ -251,7 +253,10 @@ void remote_io::access(io_request *requests, int num,
 				else {
 					ret = low_prio_senders[idx]->send_cached(&req);
 				}
-				assert(ret == 1);
+
+                if (ret != 1) {
+                    assert(ret == 1);
+                }
 			}
 		}
 	}

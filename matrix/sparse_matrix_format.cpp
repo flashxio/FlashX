@@ -47,10 +47,12 @@ void sparse_block_2d::verify(const block_2d_size &block_size) const
 				num_nz++;
 				it.next();
 			}
+#ifndef NDEBUG
 			assert(num_nz <= block_size.get_num_cols());
 			if (it.get_rel_row_idx() > 0)
 				assert(rel_row_id < it.get_rel_row_idx());
 			rel_row_id = it.get_rel_row_idx();
+#endif
 			num_rows++;
 			it = get_next_edge_iterator(it);
 		}
@@ -388,10 +390,9 @@ void SpM_2d_storage::verify(SpM_2d_index::ptr index, const std::string &mat_file
 	printf("block size: %ld, %ld\n", block_size.get_num_rows(),
 			block_size.get_num_cols());
 	for (size_t i = 0; i < index->get_num_block_rows(); i++) {
-		off_t off = index->get_block_row_off(i);
 		size_t size = index->get_block_row_off(i + 1) - index->get_block_row_off(i);
 		void *data = malloc(size);
-		assert(fseek(f, off, SEEK_SET) == 0);
+		assert(fseek(f, index->get_block_row_off(i), SEEK_SET) == 0);
 		size_t ret = fread(data, size, 1, f);
 		if (ret == 0) {
 			BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")

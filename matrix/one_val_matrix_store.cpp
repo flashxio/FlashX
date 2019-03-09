@@ -135,7 +135,9 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(
 	int node_id = -1;
 	const char *buf;
 	if (get_num_nodes() > 0) {
+#ifndef NDEBUG
 		size_t range_size = mapper->get_range_size();
+#endif
 		if (is_wide()) {
 			node_id = mapper->map2physical(start_col).first;
 			assert((size_t)ROUND(start_col, range_size)
@@ -190,7 +192,7 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(size_t id) const
 
 matrix_store::const_ptr one_val_matrix_store::transpose() const
 {
-	matrix_layout_t new_layout;
+	matrix_layout_t new_layout = L_NONE;
 	if (layout == matrix_layout_t::L_ROW)
 		new_layout = matrix_layout_t::L_COL;
 	else if (layout == matrix_layout_t::L_COL)

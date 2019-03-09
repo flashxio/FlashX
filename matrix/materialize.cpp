@@ -1265,7 +1265,9 @@ public:
 		// If the underlying matrices already exist, we merge them.
 		if (!ret.second) {
 			bool success = ret.first->second->merge(*set);
-			assert(success);
+            if (!success) {
+                assert(success);
+            }
 		}
 		else
 			vec.push_back(set);

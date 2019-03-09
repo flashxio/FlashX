@@ -80,21 +80,29 @@ void matrix_config::init(config_map::ptr map)
 	// `threads' sets #threads for sparse matrix and dense matrix operations.
 	// But users can customize #threads for sparse matrix and dense matrix
 	// separately.
+#ifdef USE_HWLOC
 	bool init_SpMT = false;
 	bool init_DMT = false;
+#endif
 	if (map->has_option("threads")) {
 		map->read_option_int("threads", num_SpM_threads);
 		map->read_option_int("threads", num_DM_threads);
+#ifdef USE_HWLOC
 		init_SpMT = true;
 		init_DMT = true;
+#endif
 	}
 	if (map->has_option("SpM_threads")) {
 		map->read_option_int("SpM_threads", num_SpM_threads);
+#ifdef USE_HWLOC
 		init_SpMT = true;
+#endif
 	}
 	if (map->has_option("DM_threads")) {
 		map->read_option_int("DM_threads", num_DM_threads);
+#ifdef USE_HWLOC
 		init_DMT = true;
+#endif
 	}
 #ifdef USE_HWLOC
 	if (!init_SpMT)

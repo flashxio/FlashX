@@ -97,7 +97,10 @@ std::shared_ptr<char> memalloc_node(int node_id, bool is_local, size_t num_bytes
 		if (ret == NULL) {
 			void *addr = NULL;
 			int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
-			assert(ret_val == 0);
+            if (ret_val) {
+                assert(ret_val == 0);
+            }
+
 			assert(((long) ret.get()) % 512 == 0);
 			ret = std::shared_ptr<char>((char *) addr, aligned_deleter());
 		}
@@ -245,7 +248,9 @@ static std::shared_ptr<char> memchunk_alloc(int node_id, size_t num_bytes)
 		smp_reserved_bytes += num_bytes;
 		void *addr = NULL;
 		int ret_val = posix_memalign(&addr, PAGE_SIZE, num_bytes);
-		assert(ret_val == 0);
+        if (ret_val) {
+            assert(ret_val == 0);
+        }
 		std::shared_ptr<char> ret((char *) addr, smp_reserved_deleter());
 		assert(((long) ret.get()) % 512 == 0);
 		return ret;

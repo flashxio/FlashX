@@ -125,7 +125,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	if (configs == NULL)
 		throw init_error("config map doesn't contain any options");
-	
+
 	params.init(configs->get_options());
 
 	// The I/O system has been initialized.
@@ -157,7 +157,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	init_aio(disk_node_ids);
 
 	file_mapper::ptr mapper = raid_conf->create_file_mapper();
-	/* 
+	/*
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will
 	 * initialize the global data. If another thread tries to run the code,
@@ -589,8 +589,7 @@ remote_io_factory::remote_io_factory(file_mapper::ptr mapper): file_io_factory(
 				IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, -1));
 	tot_accesses = 0;
 	num_ios = 0;
-	int num_files = mapper->get_num_files();
-	assert((int) global_data.read_threads.size() == num_files);
+	assert((int) global_data.read_threads.size() == mapper->get_num_files());
 
 	for (auto it = global_data.read_thread_set.begin();
 			it != global_data.read_thread_set.end(); it++)

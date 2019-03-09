@@ -125,8 +125,10 @@ safs::io_interface::ptr EM_object::io_set::create_io()
 EM_object::io_set::io_set(safs::file_io_factory::shared_ptr factory)
 {
 	this->factory = factory;
-	int ret = pthread_key_create(&io_key, NULL);
-	assert(ret == 0);
+    int ret = pthread_key_create(&io_key, NULL);
+    if (ret) {
+        assert(ret == 0);
+    }
 	pthread_spin_init(&io_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
@@ -161,7 +163,9 @@ void portion_callback::add(long key, portion_compute::ptr compute)
 		tmp[0] = compute;
 		auto ret = computes.insert(
 				std::pair<long, std::vector<portion_compute::ptr> >(key, tmp));
-		assert(ret.second);
+        if (!ret.second) {
+            assert(ret.second);
+        }
 	}
 	else
 		it->second.push_back(compute);

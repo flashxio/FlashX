@@ -694,7 +694,6 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv,
 	}
 	if (to_global_size > 0)
 		global_vec->resize(global_vec->get_length() + to_global_size);
-	size_t global_len = global_vec->get_length();
 	lock.unlock();
 
 	if (!filled_chunks.empty()) {
@@ -703,7 +702,8 @@ void vv_index_append::append(off_t idx, detail::vv_store::const_ptr vv,
 			= std::static_pointer_cast<detail::EM_vec_store>(global_vec);
 		for (size_t i = 0; i < filled_chunks.size(); i++) {
 			auto vec = filled_chunks[i];
-			assert(vec->get_global_start() + vec->get_length() <= global_len);
+			assert(vec->get_global_start() + vec->get_length() <=
+                    global_vec->get_length());
 			em_vec->write_portion_async(vec, vec->get_global_start());
 		}
 	}
@@ -933,12 +933,16 @@ void local_groupby_task::run()
 		size_t num_pending = 0;
 		if (select)
 			num_pending = safs::wait4ios(select, 0);
-		assert(num_pending == 0);
+        if (num_pending) {
+            assert(num_pending == 0);
+        }
 
 		for (size_t i = 0; i < ios.size(); i++) {
 			detail::portion_callback &cb = static_cast<detail::portion_callback &>(
 					ios[i]->get_callback());
-			assert(!cb.has_callback());
+            if (cb.has_callback()) {
+                assert(!cb.has_callback());
+            }
 		}
 	}
 }

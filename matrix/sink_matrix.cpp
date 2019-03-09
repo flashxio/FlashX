@@ -635,8 +635,10 @@ void block_sink_store::materialize_self() const
 	}
 	// We don't want to materialize all block matrices together because it
 	// might consume a lot of memory.
-	bool ret =fm::materialize(mat_vec, false);
-	assert(ret);
+	bool ret = fm::materialize(mat_vec, false);
+    if (!ret) {
+        assert(ret);
+    }
 
 	mem_matrix_store::ptr res = mem_matrix_store::create(get_num_rows(),
 			get_num_cols(), store_layout(), get_type(), -1);

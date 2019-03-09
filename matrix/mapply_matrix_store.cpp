@@ -399,8 +399,10 @@ bool mapply_store::resize(off_t local_start_row, off_t local_start_col,
 	if (whole_res) {
 		bool ret = whole_res->resize(local_start_row, local_start_col,
 				local_num_rows, local_num_cols);
+
 		// Resize the buffer matrix should always succeed.
-		assert(ret);
+        if (!ret)
+            assert(ret);
 	}
 	// We haven't partitioned the matrix yet. We now use the new partition size.
 	if (num_parts > 0 && res_bufs.empty()) {
@@ -1016,9 +1018,11 @@ void mapply_matrix_store::set_materialize_level(materialize_level level,
 		res = materialized_mapply_tall_store::ptr(
 				new materialized_mapply_tall_store(materialize_buf));
 	}
+#ifndef NDEBUG
 	const matrix_store &store = res->get_materialize_ref(store_layout());
 	assert(store.get_num_rows() == get_num_rows());
 	assert(store.get_num_cols() == get_num_cols());
+#endif
 }
 
 void mapply_matrix_store::materialize_self() const

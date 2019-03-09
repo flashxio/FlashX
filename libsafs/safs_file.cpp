@@ -253,7 +253,9 @@ bool safs_file::create_file(size_t file_size, int block_size,
 				return false;
 			}
 			int ret = fclose(f);
-			assert(ret == 0);
+            if (ret) {
+                assert(ret == 0);
+            }
 		}
 		native_file f(dir.get_name() + "/" + itoa(i));
 		ret = f.create_file(sizes_per_disk[i]);
@@ -307,7 +309,9 @@ safs_header safs_file::get_header() const
 		return safs_header();
 	}
 	int ret = fclose(f);
-	assert(ret == 0);
+    if (ret) {
+        assert(ret == 0);
+    }
 	return header;
 }
 

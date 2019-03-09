@@ -269,7 +269,9 @@ static void conv_comp_to_basic(io_request &req)
 	size_t req_size = align_off_end - align_off;
 	char *buf = NULL;
 	int ret = posix_memalign((void **) &buf, MIN_BLOCK_SIZE, req_size);
-	assert(ret == 0);
+    if (ret) {
+        assert(ret == 0);
+    }
 	orig_comp_request *orig = new orig_comp_request(req.get_offset(),
 			req.get_size(), req.get_compute());
 	data_loc_t loc(req.get_file_id(), align_off);

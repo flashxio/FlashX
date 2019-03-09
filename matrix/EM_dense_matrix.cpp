@@ -132,7 +132,9 @@ EM_matrix_store::ptr EM_matrix_store::create(const std::string &mat_file)
 		if (holder) {
 			auto ret = file_holders.insert(
 					std::pair<std::string, file_holder::ptr>(mat_file, holder));
-			assert(ret.second);
+            if (!ret.second) {
+                assert(ret.second);
+            }
 		}
 	}
 	if (holder == NULL) {
@@ -917,6 +919,9 @@ void EM_matrix_stream::write_async(local_matrix_store::const_ptr portion,
 					EM_matrix_store::CHUNK_SIZE, mat->is_wide()));
 		auto ret = portion_bufs.insert(std::pair<off_t, filled_portion::ptr>(
 					EM_portion_start, buf));
+        if (!ret.second) {
+            assert(ret.second);
+        }
 		assert(ret.second);
 	}
 	else

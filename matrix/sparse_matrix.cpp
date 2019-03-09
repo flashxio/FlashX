@@ -250,16 +250,16 @@ block_compute_task::~block_compute_task()
  */
 void block_compute_task::run(char *buf, size_t size)
 {
+#ifndef NDEBUG
 	off_t orig_off = io.get_loc().get_offset();
 	assert((orig_off - ROUND_PAGE(orig_off)) + io.get_size() <= size);
-#ifndef NDEBUG
 	size_t block_row_start
 		= io.get_top_left().get_row_idx() / block_size.get_num_rows();
-#endif
+
 	size_t num_block_rows
 		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
 	assert(io.get_top_left().get_col_idx() == 0);
-#ifndef NDEBUG
+
 	size_t block_col_start = 0;
 	size_t num_block_cols
 		= ceil(((double) io.get_num_cols()) / block_size.get_num_cols());
