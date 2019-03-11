@@ -28,6 +28,7 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
+#include "FGlib_simple.h"
 #include "save_result.h"
 
 using namespace fg;
@@ -309,7 +310,7 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 	stage = KCORE;
     long skip_count = 0;
 
-	if (kmax == 0 && k != 0) {
+	if (kmax == 0) {
 		set_kmax(graph, kmax);
 	}
 	BOOST_LOG_TRIVIAL(info) << "Setting kmax as " << kmax;
@@ -375,5 +376,4 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 				new save_query<size_t, kcore_vertex>(res_store)));
 	return fm::vector::create(res_store);
 }
-
 }

@@ -119,7 +119,8 @@ public:
 	graph_engine::ptr create_engine(graph_index::ptr index);
 
 	/**
-	 * \brief Get the header of the graph that contains basic information of the graph.
+	 * \brief Get the header of the graph that contains basic
+     *      information of the graph.
 	 * \return The graph header.
 	 */
 	const graph_header &get_graph_header() const {

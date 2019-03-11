@@ -19,7 +19,7 @@ include ../Makefile.common
 
 CXXFLAGS += -I../libsafs -I../matrix
 
-all: libgraph unit-test tools matrix libgraph-algs test-algs utils
+all: libgraph unit-test tools matrix libgraph-algs test-algs utils bindings
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -33,6 +33,9 @@ tools: libgraph
 
 unit-test: libgraph
 	$(MAKE) -C unit-test
+
+bindings: libgraph libgraph-algs matrix
+	$(MAKE) -C bindings
 
 matrix: libgraph
 	$(MAKE) -C matrix
@@ -55,6 +58,6 @@ clean:
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
 	$(MAKE) clean -C utils
-	$(MAKE) clean -C test-matrix
+	$(MAKE) clean -C bindings
 
 -include $(DEPS)
