@@ -28,7 +28,6 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
-#include "FGlib_simple.h"
 #include "save_result.h"
 
 using namespace fg;
@@ -286,7 +285,7 @@ class activate_k_filter: public vertex_filter {
 namespace fg
 {
 
-fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
+std::vector<size_t> compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
         bool skip)
 {
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(
@@ -296,7 +295,7 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 	if (k > graph->get_max_vertex_id()) {
 		BOOST_LOG_TRIVIAL(fatal)
 			<< "'k' must be between 2 and the number of nodes in the graph";
-		return fm::vector::ptr();
+        return std::vector<size_t>();
 	}
 
 	struct timeval start, end;
@@ -368,12 +367,9 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 		<< boost::format("K-core took %1% sec to complete with %2% k skips\n") %
         time_diff(start, end) % skip_count;
 
-
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<size_t>());
+    std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, kcore_vertex>(res_store)));
-	return fm::vector::create(res_store);
+				new save_query<size_t, kcore_vertex>(res)));
+	return res;
 }
 }

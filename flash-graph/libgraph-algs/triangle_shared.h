@@ -23,6 +23,7 @@
 #include "graph_config.h"
 #include "graphlab/cuckoo_set_pow2.hpp"
 #include "FGlib.h"
+#include "save_result.h"
 
 /*
  * This contains the data structures shared directed triangle counting

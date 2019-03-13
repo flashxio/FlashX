@@ -273,18 +273,16 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 
 }
 
-#include "save_result.h"
-
 namespace fg
 {
 
-fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg)
+std::vector<size_t> compute_undirected_triangles(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm counts triangles in an undirected graph";
-		return fm::vector::ptr();
+        return std::vector<size_t>();
 	}
 
 	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
@@ -312,12 +310,10 @@ fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg)
 		<< boost::format("It takes %1% seconds to count all triangles")
 		% time_diff(start, end);
 
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<size_t>());
+    std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, undirected_triangle_vertex>(res_store)));
-	return fm::vector::create(res_store);
+				new save_query<size_t, undirected_triangle_vertex>(res)));
+	return res;
 }
 
 }

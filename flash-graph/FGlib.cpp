@@ -152,13 +152,11 @@ public:
 
 class degree_vertex_program: public vertex_program_impl<degree_vertex>
 {
+    std::vector<vertex_id_t>& degree_vec;
 	edge_type type;
-	fm::detail::mem_vec_store::ptr degree_vec;
 public:
-	degree_vertex_program(fm::detail::mem_vec_store::ptr degree_vec,
-			edge_type type) {
-		this->degree_vec = degree_vec;
-		this->type = type;
+	degree_vertex_program(std::vector<vertex_id_t>& degree_vec,
+			edge_type type) : degree_vec(degree_vec), type(type) {
 	}
 
 	edge_type get_edge_type() const {
@@ -166,19 +164,18 @@ public:
 	}
 
 	void set_degree(vertex_id_t id, vsize_t degree) {
-		degree_vec->set(id, degree);
+		degree_vec[id] = degree;
 	}
 };
 
 class degree_vertex_program_creater: public vertex_program_creater
 {
-	fm::detail::mem_vec_store::ptr degree_vec;
+    std::vector<vertex_id_t>& degree_vec;
 	edge_type type;
 public:
 	degree_vertex_program_creater(
-			fm::detail::mem_vec_store::ptr degree_vec, edge_type type) {
-		this->degree_vec = degree_vec;
-		this->type = type;
+			std::vector<vertex_id_t>& degree_vec, edge_type type) :
+    degree_vec(degree_vec), type(type) {
 	}
 
 	vertex_program::ptr create() const {
@@ -197,22 +194,20 @@ void degree_vertex::run(vertex_program &prog)
 
 }
 
-fm::vector::ptr get_degree(FG_graph::ptr fg, edge_type type)
+std::vector<vertex_id_t> get_degree(FG_graph::ptr fg, edge_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<degree_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	fm::detail::mem_vec_store::ptr degree_vec = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<vsize_t>());
+	std::vector<vertex_id_t> degree_vec(fg->get_num_vertices());
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new degree_vertex_program_creater(degree_vec, type)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	return fm::vector::create(degree_vec);
+	return degree_vec;
 }
 
 /*************** Get the degree of vertices in a timestamp ********************/
@@ -238,17 +233,15 @@ public:
 
 class ts_degree_vertex_program: public vertex_program_impl<ts_degree_vertex>
 {
+    std::vector<vertex_id_t>& degree_vec;
+	edge_type type;
 	time_t start_time;
 	time_t time_interval;
-	edge_type type;
-	fm::detail::mem_vec_store::ptr degree_vec;
 public:
-	ts_degree_vertex_program(fm::detail::mem_vec_store::ptr degree_vec,
-			edge_type type, time_t start_time, time_t time_interval) {
-		this->degree_vec = degree_vec;
-		this->type = type;
-		this->start_time = start_time;
-		this->time_interval = time_interval;
+	ts_degree_vertex_program(std::vector<vertex_id_t>& degree_vec,
+			edge_type type, time_t start_time, time_t time_interval) :
+    degree_vec(degree_vec), type(type), start_time(start_time),
+    time_interval(time_interval) {
 	}
 
 	time_t get_start_time() const {
@@ -264,24 +257,22 @@ public:
 	}
 
 	void set_degree(vertex_id_t id, vsize_t degree) {
-		degree_vec->set(id, degree);
+		degree_vec[id] = degree;
 	}
 };
 
 class ts_degree_vertex_program_creater: public vertex_program_creater
 {
+    std::vector<vertex_id_t>& degree_vec;
+	edge_type type;
 	time_t start_time;
 	time_t time_interval;
-	fm::detail::mem_vec_store::ptr degree_vec;
-	edge_type type;
 public:
 	ts_degree_vertex_program_creater(
-			fm::detail::mem_vec_store::ptr degree_vec, edge_type type,
-			time_t start_time, time_t time_interval) {
-		this->degree_vec = degree_vec;
-		this->type = type;
-		this->start_time = start_time;
-		this->time_interval = time_interval;
+			std::vector<vertex_id_t>& degree_vec, edge_type type,
+			time_t start_time, time_t time_interval) :
+    degree_vec(degree_vec), type(type), start_time(start_time),
+    time_interval(time_interval) {
 	}
 
 	vertex_program::ptr create() const {
@@ -317,7 +308,7 @@ void ts_degree_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 }
 
-fm::vector::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+std::vector<vertex_id_t> get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval)
 {
 	graph_index::ptr index = NUMA_graph_index<ts_degree_vertex>::create(
@@ -325,14 +316,12 @@ fm::vector::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 
-	fm::detail::mem_vec_store::ptr degree_vec = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<vsize_t>());
+    std::vector<vertex_id_t> degree_vec(fg->get_num_vertices());
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new ts_degree_vertex_program_creater(degree_vec, type,
 					start_time, time_interval)));
 	graph->wait4complete();
-	return fm::vector::create(degree_vec);
+	return degree_vec;
 }
 
 /************** Get the time range of the time-series graph *******************/

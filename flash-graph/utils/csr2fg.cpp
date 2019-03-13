@@ -33,6 +33,7 @@ using namespace fm;
 typedef off_t row_ptr_t;
 typedef int col_idx_t;
 
+#if 0
 std::vector<row_ptr_t> read_offs(const std::string &file)
 {
 	safs::native_file f(file);
@@ -120,9 +121,11 @@ vector_vector::ptr read_csr(const std::string &row_ptr_file,
 		offs[i] *= sizeof(col_idx_t);
 	return vector_vector::create(detail::vv_store::create(offs, col_idxs));
 }
+#endif
 
 int main(int argc, char *argv[])
 {
+#if 0
 	if (argc < 5) {
 		fprintf(stderr,
 				"csr2fg conf_file name row_ptr_file col_file [row_ptr_file col_file]\n");
@@ -234,6 +237,6 @@ int main(int argc, char *argv[])
 		if (graph && graph->get_graph_data())
 			graph->get_graph_data()->dump(adj_file);
 	}
-
 	destroy_flash_matrix();
+#endif
 }

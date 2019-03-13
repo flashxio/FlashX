@@ -21,7 +21,6 @@
 #endif
 
 #include "log.h"
-
 #include "triangle_shared.h"
 
 using namespace fg;
@@ -391,19 +390,17 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 
 }
 
-#include "save_result.h"
-
 namespace fg
 {
 
-fm::vector::ptr compute_directed_triangles(FG_graph::ptr fg,
+std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm counts triangles in a directed graph";
-		return fm::vector::ptr();
+        return std::vector<size_t>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex>::create(
@@ -431,12 +428,10 @@ fm::vector::ptr compute_directed_triangles(FG_graph::ptr fg,
 		<< boost::format("It takes %1% seconds to count all triangles")
 		% time_diff(start, end);
 
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<size_t>());
+    std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<size_t, directed_triangle_vertex>(res_store)));
-	return fm::vector::create(res_store);
+				new save_query<size_t, directed_triangle_vertex>(res)));
+    return res;
 }
 
 }

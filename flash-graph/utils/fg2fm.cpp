@@ -35,8 +35,8 @@
 #include "mem_vv_store.h"
 #include "sparse_matrix.h"
 
+#if 0
 using namespace fm;
-
 void verify_2d_matrix(const std::string &mat_file,
 		const std::string &mat_idx_file, bool from_safs)
 {
@@ -137,6 +137,7 @@ vector_vector::ptr load_graph(const std::string &graph_file,
 
 	return vector_vector::create(vv);
 }
+#endif
 
 void print_usage()
 {
@@ -152,6 +153,7 @@ void print_usage()
 
 int main(int argc, char *argv[])
 {
+#if 0
 	size_t block_height = block_max_num_rows;
 	size_t block_width = block_height;
 	size_t vv_groupby_buf_size = 1024 * 1024;
@@ -186,6 +188,7 @@ int main(int argc, char *argv[])
 				exit(1);
 		}
 	}
+
 	block_2d_size block_size(block_height, block_width);
 
 	argv += 1 + num_opts;
@@ -256,6 +259,6 @@ int main(int argc, char *argv[])
 			verify_2d_matrix(t_mat_file, t_mat_idx_file, to_safs);
 		}
 	}
-
 	destroy_flash_matrix();
+#endif
 }

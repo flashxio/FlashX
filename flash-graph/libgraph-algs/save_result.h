@@ -2,9 +2,6 @@
 #define __SAVE_RESULT_H__
 
 /*
- * Copyright 2014 Open Connectome Project (http://openconnecto.me)
- * Written by Da Zheng (zhengda1936@gmail.com)
- *
  * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,22 +18,20 @@
  */
 
 #include "graph_engine.h"
-#include "mem_vec_store.h"
 
 namespace {
 
 template<class T, class VertexType>
 class save_query: public fg::vertex_query
 {
-	fm::detail::mem_vec_store::ptr vec;
+    std::vector<T>& vec;
 public:
-	save_query(fm::detail::mem_vec_store::ptr vec) {
-		this->vec = vec;
+	save_query(std::vector<T>& vec) : vec(vec){
 	}
 
 	virtual void run(fg::graph_engine &graph, fg::compute_vertex &v1) {
 		VertexType &v = (VertexType &) v1;
-		vec->set(graph.get_graph_index().get_vertex_id(v), v.get_result());
+		vec[graph.get_graph_index().get_vertex_id(v)] = v.get_result();
 	}
 
 	virtual void merge(fg::graph_engine &graph, fg::vertex_query::ptr q) {

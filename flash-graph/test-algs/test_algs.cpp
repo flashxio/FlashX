@@ -22,6 +22,7 @@
 #include <gperftools/profiler.h>
 #endif
 
+#include <algorithm>
 #include "FGlib.h"
 #include "ts_graph.h"
 #include "sparse_matrix.h"
@@ -44,6 +45,16 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+template<class T>
+std::pair<T, off_t> max_val_loc(std::vector<T>& res)
+{
+	// TODO we should be able to parallelize it.
+    auto itr = std::max_element(res.begin(), res.end());
+    T ret = *itr;
+	off_t idx = itr - res.begin();
+	return std::pair<T, off_t>(ret, idx);
+}
+
 void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
 	int opt;
@@ -62,23 +73,23 @@ void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 		}
 	}
 
-	fm::vector::ptr triangles;
+    std::vector<size_t> triangles;
 	if (fast)
 		triangles = compute_directed_triangles_fast(graph,
 				directed_triangle_type::CYCLE);
 	else
 		triangles = compute_directed_triangles(graph,
 				directed_triangle_type::CYCLE);
-	if (triangles)
-		printf("There are %ld cycle triangles\n", triangles->sum<size_t>());
+
+    size_t ntri = std::accumulate(triangles.begin(), triangles.end(), 0);
+    printf("There are %lu cycle triangles\n", ntri);
 }
 
 void run_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
-	fm::vector::ptr triangles;
-	triangles = compute_undirected_triangles(graph);
-	if (triangles)
-		printf("There are %ld triangles\n", triangles->sum<size_t>());
+	auto triangles = compute_undirected_triangles(graph);
+    size_t ntri = std::accumulate(triangles.begin(), triangles.end(), 0);
+    printf("There are %lu triangles\n", ntri);
 }
 
 void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
@@ -100,7 +111,7 @@ void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 		}
 	}
 
-	fm::vector::ptr scan;
+    std::vector<size_t> scan;
 	if (num_hops == 1)
 		scan = compute_local_scan(graph);
 	else if (num_hops == 2)
@@ -109,10 +120,9 @@ void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 		fprintf(stderr, "we don't support local scan of more than 2 hops\n");
 		exit(1);
 	}
-	if (scan) {
-//		std::pair<size_t, off_t> ret = scan->max_val_loc();
-//		printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
-	}
+
+    std::pair<size_t, off_t> ret = max_val_loc<size_t>(scan);
+    printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
 }
 
 void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
@@ -143,53 +153,9 @@ void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
 	}
 }
 
-fm::data_frame::ptr get_cluster_counts(fm::vector::ptr comp_ids)
-{
-	fm::col_vec::ptr vec = fm::col_vec::create(comp_ids);
-	fm::bulk_operate::const_ptr add = fm::bulk_operate::conv2ptr(
-			fm::get_scalar_type<size_t>().get_basic_ops().get_add());
-	fm::agg_operate::const_ptr sum = fm::agg_operate::create(add);;
-	return vec->groupby(sum, true);
-}
-
-std::pair<fg::vertex_id_t, size_t> get_max_cid(fm::data_frame::ptr counts)
-{
-	fm::detail::mem_vec_store::const_ptr ids
-		= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-				counts->get_vec(0));
-	fm::detail::mem_vec_store::const_ptr cnts
-		= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-				counts->get_vec(1));
-	assert(cnts->get_type() == fm::get_scalar_type<size_t>());
-	size_t idx = 0;
-	size_t max_size = cnts->get<size_t>(0);
-	for (size_t i = 1; i < cnts->get_length(); i++) {
-		// We should skip the clusters with only one vertex.
-		if (ids->get<vertex_id_t>(i) == INVALID_VERTEX_ID)
-			continue;
-
-		if (cnts->get<size_t>(i) > max_size) {
-			max_size = cnts->get<size_t>(i);
-			idx = i;
-		}
-	}
-	fg::vertex_id_t id = ids->get<fg::vertex_id_t>(idx);
-	return std::pair<fg::vertex_id_t, size_t>(id, max_size);
-}
-
-void print_cc(fm::vector::ptr comp_ids)
-{
-	fm::data_frame::ptr cnts = get_cluster_counts(comp_ids);
-	std::pair<vertex_id_t, size_t> max_comp = get_max_cid(cnts);
-	printf("There are %ld components (exclude empty vertices), and largest comp has %ld vertices\n",
-			cnts->get_num_entries(), max_comp.second);
-}
-
 void run_cc(FG_graph::ptr graph, int argc, char *argv[])
 {
-	fm::vector::ptr cc = compute_cc(graph);
-	if (cc)
-		print_cc(cc);
+	auto cc = compute_cc(graph);
 }
 
 void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
@@ -213,13 +179,11 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 				abort();
 		}
 	}
-	fm::vector::ptr comp_ids;
+    std::vector<vertex_id_t> comp_ids;
 	if (sync)
 		comp_ids = compute_sync_wcc(graph);
 	else
 		comp_ids = compute_wcc(graph);
-	if (comp_ids == NULL)
-		return;
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
@@ -227,21 +191,16 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 			perror("fopen");
 			return;
 		}
-		fm::detail::mem_vec_store::const_ptr mem_ids
-			= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-					comp_ids->get_raw_store());
-		for (size_t i = 0; i < comp_ids->get_length(); i++)
-			fprintf(f, "%ld %d\n", i, mem_ids->get<vertex_id_t>(i));
+
+		for (size_t i = 0; i < comp_ids.size(); i++)
+			fprintf(f, "%lu %u\n", i, comp_ids[i]);
 		fclose(f);
 	}
-	print_cc(comp_ids);
 }
 
 void run_scc(FG_graph::ptr graph, int argc, char *argv[])
 {
-	fm::vector::ptr cc = compute_scc(graph);
-	if (cc)
-		print_cc(cc);
+	auto cc = compute_scc(graph);
 }
 
 void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
@@ -303,7 +262,7 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 		}
 	}
 
-	fm::vector::ptr pr;
+    std::vector<float> pr;
 	switch (version) {
 		case 1:
 			pr = compute_pagerank(graph, num_iters, damping_factor);
@@ -314,15 +273,11 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 		default:
 			abort();
 	}
-	if (pr == NULL)
-		return;
 
-	printf("The sum of pagerank of all vertices: %f\n", pr->sum<float>());
+    float sum = std::accumulate(pr.begin(), pr.end(), 0.0);
+	printf("The sum of pagerank of all vertices: %f\n", sum);
 
 	// Get the top N pagerank values and the corresponding vertices.
-	fm::detail::mem_vec_store::const_ptr pr_store
-		= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-				pr->get_raw_store());
 	typedef std::pair<float, off_t> val_loc_t;
 	struct comp_val {
 		bool operator()(const val_loc_t &v1, const val_loc_t &v2) {
@@ -330,35 +285,17 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 		}
 	};
 	std::priority_queue<val_loc_t, std::vector<val_loc_t>, comp_val> queue;
-	for (size_t i = 0; i < pr->get_length(); i++) {
-		float val = pr_store->get<float>(i);
-		queue.push(val_loc_t(val, i));
+	for (size_t i = 0; i < pr.size(); i++) {
+		queue.push(val_loc_t(pr[i], i));
 		if (queue.size() > 10)
 			queue.pop();
 	}
+
 	while (!queue.empty()) {
 		val_loc_t pair = queue.top();
 		printf("v%ld: %f\n", pair.second, pair.first);
 		queue.pop();
 	}
-}
-
-template<class T>
-std::pair<T, off_t> max_val_loc(fm::vector::ptr res)
-{
-	fm::detail::mem_vec_store::const_ptr res_store
-		= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-				res->get_raw_store());
-	T ret = std::numeric_limits<T>::min();
-	off_t idx = 0;
-	// TODO we should be able to parallelize it.
-	for (size_t i = 0; i < res->get_length(); i++) {
-		if (ret < res_store->get<T>(i)) {
-			ret = res_store->get<T>(i);
-			idx = i;
-		}
-	}
-	return std::pair<T, off_t>(ret, idx);
 }
 
 void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
@@ -438,7 +375,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 		for (time_t interval_start
 				= start_time + num_time_intervals * time_interval;
 				interval_start < end_time; interval_start += time_interval) {
-			fm::vector::ptr res = compute_sstsg(graph, interval_start,
+			auto res = compute_sstsg(graph, interval_start,
 					time_interval, num_time_intervals);
 			std::pair<float, off_t> p = max_val_loc<float>(res);
 			printf("v%ld has max scan %f\n", p.second, p.first);
@@ -446,7 +383,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	}
 	else {
 		printf("start time: %ld, interval: %ld\n", start_time, time_interval);
-		fm::vector::ptr res = compute_sstsg(graph, start_time,
+		auto res = compute_sstsg(graph, start_time,
 				time_interval, num_time_intervals);
 
 		std::pair<float, off_t> p = max_val_loc<float>(res);
@@ -457,11 +394,9 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 				perror("fopen");
 				return;
 			}
-			fm::detail::mem_vec_store::const_ptr res_store
-				= std::dynamic_pointer_cast<const fm::detail::mem_vec_store>(
-						res->get_raw_store());
-			for (size_t i = 0; i < res->get_length(); i++)
-				fprintf(f, "\"%ld\" %f\n", i, res_store->get<float>(i));
+
+			for (size_t i = 0; i < res.size(); i++)
+				fprintf(f, "\"%ld\" %f\n", i, res[i]);
 			fclose(f);
 		}
 	}
@@ -514,10 +449,8 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 #endif
 	time_t start_time = conv_str_to_time(start_time_str);
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
-	fm::vector::ptr comp_ids = compute_ts_wcc(graph, start_time,
+	auto comp_ids = compute_ts_wcc(graph, start_time,
 			time_interval);
-	if (comp_ids)
-		print_cc(comp_ids);
 }
 
 void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
@@ -553,7 +486,11 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 		exit(-1);
 	}
 
-	fm::vector::ptr kcorev = compute_kcore(graph, k, kmax, skips);
+	auto kcorev = compute_kcore(graph, k, kmax, skips);
+    std::cout << "[ ";
+    for (auto const& v : kcorev)
+        std::cout << v << " ";
+    std::cout << "]\n";
 }
 
 void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
@@ -588,7 +525,7 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 		ids.push_back(id);
 	}
 
-	fm::vector::ptr btwn_v = compute_betweenness_centrality(graph, ids);
+	auto btwn_v = compute_betweenness_centrality(graph, ids);
 //	if (!write_out.empty() && btwn_v)
 //		btwn_v->to_file(write_out);
 }
@@ -766,54 +703,6 @@ void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
 	}
 
     compute_sem_kmeans(graph, k, init, max_iters, tolerance);
-}
-
-void run_spmm(FG_graph::ptr fg, int argc, char *argv[])
-{
-	int opt;
-	int num_opts = 0;
-	std::string entry_type;
-	int num_cols = 1;
-
-	while ((opt = getopt(argc, argv, "e:c:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'e':
-				entry_type = optarg;
-				num_opts++;
-				break;
-			case 'c':
-				num_cols = atoi(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-				abort();
-		}
-	}
-
-	fm::sparse_matrix::ptr mat;
-	if (entry_type.empty())
-		mat = create_sparse_matrix(fg, NULL);
-	else if (entry_type == "I")
-		mat = create_sparse_matrix(fg, &fm::get_scalar_type<int>());
-	else if (entry_type == "L")
-		mat = create_sparse_matrix(fg, &fm::get_scalar_type<long>());
-	else if (entry_type == "F")
-		mat = create_sparse_matrix(fg, &fm::get_scalar_type<float>());
-	else if (entry_type == "D")
-		mat = create_sparse_matrix(fg, &fm::get_scalar_type<double>());
-	else {
-		fprintf(stderr, "unknown entry type\n");
-		return;
-	}
-	int num_nodes = safs::params.get_num_nodes();
-	fm::dense_matrix::ptr in = fm::dense_matrix::create_randu<double>(0, 1,
-			mat->get_num_cols(), num_cols, fm::matrix_layout_t::L_ROW, num_nodes);
-	fm::detail::matrix_store::ptr out = fm::detail::mem_matrix_store::create(
-			mat->get_num_rows(), num_cols, fm::matrix_layout_t::L_ROW,
-			fm::get_scalar_type<double>(), num_nodes);
-	mat->multiply(in->get_raw_store(), out);
 }
 
 std::string supported_algs[] = {
@@ -995,9 +884,6 @@ int main(int argc, char *argv[])
 #endif
 	else if (alg == "sem_kmeans") {
 		run_sem_kmeans(graph, argc, argv);
-	}
-	else if (alg == "spmm") {
-		run_spmm(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());

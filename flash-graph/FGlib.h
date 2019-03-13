@@ -31,12 +31,6 @@ namespace safs
 	class file_io_factory;
 };
 
-namespace fm
-{
-	class sparse_matrix;
-	class scalar_type;
-}
-
 namespace fg
 {
 
@@ -165,7 +159,7 @@ enum directed_triangle_type
 	ALL,
 };
 
-fm::vector::ptr compute_cc(FG_graph::ptr fg);
+std::vector<vertex_id_t> compute_cc(FG_graph::ptr fg);
 
 /**
   * \brief Compute all weakly connectected components of a graph.
@@ -174,7 +168,7 @@ fm::vector::ptr compute_cc(FG_graph::ptr fg);
   * \return A vector with a component ID for each vertex in the graph.
   *
 */
-fm::vector::ptr compute_wcc(FG_graph::ptr fg);
+std::vector<vertex_id_t> compute_wcc(FG_graph::ptr fg);
 
 /**
   * \brief Compute all weakly connectected components of a graph synchronously.
@@ -184,7 +178,7 @@ fm::vector::ptr compute_wcc(FG_graph::ptr fg);
   * \param fg The FlashGraph graph object for which you want to compute.
   * \return A vector with a component ID for each vertex in the graph.
  */
-fm::vector::ptr compute_sync_wcc(FG_graph::ptr fg);
+std::vector<vertex_id_t> compute_sync_wcc(FG_graph::ptr fg);
 
 /**
  * \brief Compute all weakly connectected components of a time-series graph
@@ -196,7 +190,7 @@ fm::vector::ptr compute_sync_wcc(FG_graph::ptr fg);
  * \return A vector with a component ID for each vertex in the graph.
  *
  */
-fm::vector::ptr compute_ts_wcc(FG_graph::ptr fg,
+std::vector<vertex_id_t> compute_ts_wcc(FG_graph::ptr fg,
 		time_t start_time, time_t time_interval);
 
 /**
@@ -206,7 +200,7 @@ fm::vector::ptr compute_ts_wcc(FG_graph::ptr fg,
   * \return A vector with a component ID for each vertex in the graph.
   *
 */
-fm::vector::ptr compute_scc(FG_graph::ptr fg);
+std::vector<vertex_id_t>compute_scc(FG_graph::ptr fg);
 
 /**
   * \brief Compute the directed triangle count for each each vertex.
@@ -218,9 +212,9 @@ fm::vector::ptr compute_scc(FG_graph::ptr fg);
   *         each vertex in the graph.
   *
 */
-fm::vector::ptr compute_directed_triangles(FG_graph::ptr fg,
+std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type);
-fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
+std::vector<size_t> compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type);
 /**
   * \brief Compute undirected triangle count for each vertex.
@@ -230,7 +224,7 @@ fm::vector::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
   *         each vertex in the graph.
   *
 */
-fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg);
+std::vector<size_t> compute_undirected_triangles(FG_graph::ptr fg);
 
 /**
   * \brief Compute the per-vertex local Scan Statistic
@@ -239,8 +233,8 @@ fm::vector::ptr compute_undirected_triangles(FG_graph::ptr fg);
   *          local scan value.
   *
 */
-fm::vector::ptr compute_local_scan(FG_graph::ptr);
-fm::vector::ptr compute_local_scan2(FG_graph::ptr fg);
+std::vector<size_t> compute_local_scan(FG_graph::ptr);
+std::vector<size_t> compute_local_scan2(FG_graph::ptr fg);
 
 /**
   * \brief Obtain the top K vertices with the largest local Scan
@@ -275,7 +269,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed);
   *         PageRank value.
   *
 */
-fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor);
 
 /**
@@ -291,10 +285,10 @@ fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
   *         PageRank value.
   *
 */
-fm::vector::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
+std::vector<float> compute_pagerank2(FG_graph::ptr, int num_iters,
 		float damping_factor);
 
-fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
 
 /**
@@ -309,7 +303,7 @@ fm::vector::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
  * \return An `FG_vector` containing the core of each vertex between `k`
  *         and `kmax`. All other vertices are assigned to core 0.
  */
-fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0,
+std::vector<size_t> compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0,
         bool skip=true);
 
 /**
@@ -318,7 +312,7 @@ fm::vector::ptr compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax=0,
  * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
  * \return A vector with an entry for each vertex degree.
  */
-fm::vector::ptr get_degree(FG_graph::ptr fg, edge_type type);
+std::vector<vertex_id_t> get_degree(FG_graph::ptr fg, edge_type type);
 
 /**
   * \brief Compute the transitivity/clustering coefficient of a graph.
@@ -327,7 +321,7 @@ fm::vector::ptr get_degree(FG_graph::ptr fg, edge_type type);
   * \return A vector with an entry for each vertex in the graph's
   *         transitivity value.
 */
-fm::vector::ptr compute_transitivity(FG_graph::ptr fg);
+std::vector<vertex_id_t> compute_transitivity(FG_graph::ptr fg);
 
 /**
   * \brief Compute the betweeenness centrality of a graph.
@@ -337,7 +331,7 @@ fm::vector::ptr compute_transitivity(FG_graph::ptr fg);
   * \return A vector with an entry for each vertex in the graph's
   *         betweennesss centrality value.
 */
-fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
+std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		const std::vector<vertex_id_t>& vids);
 
 /**
@@ -349,7 +343,7 @@ fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
  * \param time_interval length of the time interval.
  * \return A vector with an entry for each vertex degree.
  */
-fm::vector::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+std::vector<vertex_id_t> get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
 
 /**
@@ -375,8 +369,5 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  * \param levels The number of levels of the hierarchy to do.
  */
 void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
-
-std::shared_ptr<fm::sparse_matrix> create_sparse_matrix(fg::FG_graph::ptr fg,
-		const fm::scalar_type *entry_type);
 }
 #endif

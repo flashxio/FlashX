@@ -38,7 +38,7 @@ using namespace fg;
 namespace {
 short bfs_max_dist;
 
-/* `update` phase is where BC is updated */ 
+/* `update` phase is where BC is updated */
 vertex_id_t g_source_vertex;
 enum btwn_phase_t
 {
@@ -60,15 +60,15 @@ class betweenness_vertex: public compute_directed_vertex
 	public:
 	betweenness_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		btwn_cent = 0;
-		delta = 0; 
+		delta = 0;
 		sigma = 0 ;
-		dist = -1; 
+		dist = -1;
 		bfs_visited = false;
 	}
 
 	void init(int sigma, short dist) {
 		this->sigma = sigma;
-		this->dist = dist;	
+		this->dist = dist;
 		this->delta = 0;
 		this->bfs_visited = false;
 	}
@@ -92,7 +92,7 @@ class betweenness_vertex: public compute_directed_vertex
 
 	bool is_bfs_visited() const {
 		return bfs_visited;
-	} 
+	}
 	void set_visited(bool visited) {
 		this->bfs_visited = visited;
 	}
@@ -218,7 +218,7 @@ class bfs_message: public vertex_message
 	int parent_sigma;
 
 	public:
-	bfs_message(vertex_id_t id, short sender_dist, int sigma): 
+	bfs_message(vertex_id_t id, short sender_dist, int sigma):
 		vertex_message(sizeof(bfs_message), true) {
 			sender_id = id;
 			parent_dist = sender_dist;
@@ -231,7 +231,7 @@ class bfs_message: public vertex_message
 
 	const short get_parent_dist() const {
 		return parent_dist;
-	} 
+	}
 
 	const int get_parent_sigma() const {
 		return parent_sigma;
@@ -246,7 +246,7 @@ class bp_message: public vertex_message
 	short dist;
 
 	public:
-	bp_message(short dist, float delta, int sigma): 
+	bp_message(short dist, float delta, int sigma):
 		vertex_message(sizeof(bp_message), false) {
 			this->delta = delta;
 			this->sigma = sigma;
@@ -255,7 +255,7 @@ class bp_message: public vertex_message
 
 	const float get_sender_delta() const {
 		return delta;
-	} 
+	}
 
 	const int get_sender_sigma() const {
 		return sigma;
@@ -266,19 +266,19 @@ class bp_message: public vertex_message
 	}
 };
 
-void betweenness_vertex::run(vertex_program &prog) { 
+void betweenness_vertex::run(vertex_program &prog) {
 	switch (g_alg_phase) {
-		case btwn_phase_t::bfs:  
+		case btwn_phase_t::bfs:
 			{
-				if (is_bfs_visited()) 
-					return; 
+				if (is_bfs_visited())
+					return;
 				directed_vertex_request req(prog.get_vertex_id(*this), edge_type::OUT_EDGE);
 				request_partial_vertices(&req, 1);
 				((bfs_vertex_program&)prog).
 					add_visited_bfs(prog.get_vertex_id(*this));
 				break;
 			}
-		case btwn_phase_t::back_prop: 
+		case btwn_phase_t::back_prop:
 			{
 				directed_vertex_request req(prog.get_vertex_id(*this), edge_type::IN_EDGE);
 				request_partial_vertices(&req, 1);
@@ -287,7 +287,7 @@ void betweenness_vertex::run(vertex_program &prog) {
 		case btwn_phase_t::bc_summation:
 			{
 				if (prog.get_vertex_id(*this) != g_source_vertex)
-					btwn_cent += delta;	
+					btwn_cent += delta;
 				break;
 			}
 		default:
@@ -312,7 +312,7 @@ void betweenness_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		case btwn_phase_t::back_prop :
 			{
 				/* NOTE: Sending to all in_neighs instead of only P's ... */
-				int num_dests = vertex.get_num_edges(IN_EDGE); 
+				int num_dests = vertex.get_num_edges(IN_EDGE);
 				edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0, num_dests);
 				bp_message msg(this->dist, this->delta, this->sigma);
 				prog.multicast_msg(it, msg);
@@ -328,7 +328,7 @@ void betweenness_vertex::run_on_message(vertex_program &prog, const vertex_messa
 		case btwn_phase_t::bfs:
 			{
 				const bfs_message &msg = (const bfs_message &) msg1;
-				if (this->dist < 0) { 
+				if (this->dist < 0) {
 					this->dist = msg.get_parent_dist() + 1;
 				}
 				if (this->dist == msg.get_parent_dist() + 1) {
@@ -346,9 +346,9 @@ void betweenness_vertex::run_on_message(vertex_program &prog, const vertex_messa
 
 				// Now we know it's only parents
 				if (msg.get_sender_sigma() != 0) { // If msg.get_sender_sigma() == 0 do nothing
-					delta = delta + (((float)sigma/msg.get_sender_sigma()) 
+					delta = delta + (((float)sigma/msg.get_sender_sigma())
 							* (1 + msg.get_sender_delta()));
-				} 
+				}
 				break;
 			}
 		default:
@@ -370,7 +370,7 @@ class btwn_initializer: public vertex_initializer
 	}
 };
 
-/** For back prop phase where we activate vertices 
+/** For back prop phase where we activate vertices
   with only dist = max_dist. Also resets the bfs bit
   to unvisited.
   */
@@ -380,7 +380,7 @@ class activate_by_dist_filter: public vertex_filter {
 	public:
 	activate_by_dist_filter (short dist) {
 		this->dist = dist;
-	} 
+	}
 	bool keep(vertex_program &prog, compute_vertex &v) {
 		betweenness_vertex &bv = (betweenness_vertex &) v;
 		bool is_max_v = bv.get_dist() == dist;
@@ -390,16 +390,16 @@ class activate_by_dist_filter: public vertex_filter {
 };
 }
 
-namespace fg 
+namespace fg
 {
-fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
+std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		const std::vector<vertex_id_t>& ids)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm currently works on a directed graph";
-		return fm::vector::ptr();
+        return std::vector<float>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(
@@ -418,7 +418,7 @@ fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
 
 	BOOST_FOREACH (vertex_id_t id , ids) {
 		if (!graph->get_num_edges(id))
-		   continue;	
+		   continue;
 
 		g_source_vertex = id;
 		bfs_max_dist = 0; // Must reset bfs dist for each vertex
@@ -448,7 +448,7 @@ fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
 
 		if (bfs_max_dist > 0) {
 			// Back propagation phase
-			BOOST_LOG_TRIVIAL(info) << "Starting back_prop phase for vertex: " 
+			BOOST_LOG_TRIVIAL(info) << "Starting back_prop phase for vertex: "
 					<< g_source_vertex << "...";
 			g_alg_phase = btwn_phase_t::back_prop;
 
@@ -465,16 +465,9 @@ fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
 	}
 
 	gettimeofday(&end, NULL);
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<float>());
+    std::vector<float> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<float, betweenness_vertex>(res_store)));
-
-#if 0
-	BOOST_LOG_TRIVIAL(info) << "Printing betweenness vector:";
-	ret->print(); 
-#endif
+				new save_query<float, betweenness_vertex>(res)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -484,6 +477,6 @@ fm::vector::ptr compute_betweenness_centrality(FG_graph::ptr fg,
 	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
 		% time_diff(start, end);
 
-	return fm::vector::create(res_store);
+	return res;
 }
 }

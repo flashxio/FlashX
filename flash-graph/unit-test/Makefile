@@ -24,15 +24,12 @@ SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-UNITTEST = test-bitmap test-partitioner test-vertex_index test-sparse_matrix
+UNITTEST = test-bitmap test-partitioner test-vertex_index
 
 all: $(UNITTEST)
 
 test-bitmap: test-bitmap.o ../libgraph.a
 	$(CXX) -o test-bitmap test-bitmap.o $(LDFLAGS)
-
-test-sparse_matrix: test-sparse_matrix.o ../libgraph.a
-	$(CXX) -o test-sparse_matrix test-sparse_matrix.o $(LDFLAGS)
 
 test-partitioner: test-partitioner.o ../libgraph.a
 	$(CXX) -o test-partitioner test-partitioner.o $(LDFLAGS)
@@ -43,7 +40,6 @@ test-vertex_index: test-vertex_index.o ../libgraph.a
 test:
 	./test-bitmap
 	./test-partitioner
-	./test-sparse_matrix
 	./test-vertex_index
 
 clean:
@@ -52,4 +48,4 @@ clean:
 	rm -f *~
 	rm -f $(UNITTEST)
 
--include $(DEPS) 
+-include $(DEPS)

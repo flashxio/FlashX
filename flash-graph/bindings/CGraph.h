@@ -23,14 +23,6 @@
 #endif
 
 #include "FGlib.h"
-#include "ts_graph.h"
-#include "sparse_matrix.h"
-#include "libgraph-algs/sem_kmeans.h"
-
-#include "vector.h"
-#include "col_vec.h"
-#include "data_frame.h"
-
 
 namespace fg {
 
@@ -44,8 +36,8 @@ class CGraph {
 
     public:
         CGraph() { }
-        CGraph(const std::string& graph_file, const std::string& index_file,
-                const std::string& config_file) : graph_file(graph_file),
+        CGraph(std::string graph_file, std::string index_file,
+                std::string config_file) : graph_file(graph_file),
                 index_file(index_file) {
 
                     config_map::ptr configs = config_map::create(config_file);
@@ -63,7 +55,7 @@ class CGraph {
 
         // Coreness
         std::vector<size_t> coreness(const size_t kmax=0, const size_t kmin=0) {
-            return compute_kcore(graph, kmin, kmax, true)->conv2std<size_t>();
+            return compute_kcore(graph, kmin, kmax, true);
         }
 
         // Betweenness Centrality
@@ -75,7 +67,7 @@ class CGraph {
                 }
             }
 
-            return compute_betweenness_centrality(graph, ids)->conv2std<float>();
+            return compute_betweenness_centrality(graph, ids);
         }
 
         // Degree
@@ -88,32 +80,29 @@ class CGraph {
             else
                 type = BOTH_EDGES;
 
-            return get_degree(graph, type)->conv2std<vertex_id_t>();
+            return get_degree(graph, type);
         }
 
         // Triangle counting
-        std::vector<vertex_id_t> triangles(bool cycles_only=false) {
+        std::vector<size_t> triangles(bool cycles_only=false) {
             if (graph->is_directed()) {
                 if (cycles_only)
                     return compute_directed_triangles_fast(graph,
-                            directed_triangle_type::CYCLE)->
-                                conv2std<vertex_id_t>();
+                            directed_triangle_type::CYCLE);
                 else
                     return compute_directed_triangles(graph,
-                            directed_triangle_type::CYCLE)->
-                                conv2std<vertex_id_t>();
+                            directed_triangle_type::CYCLE);
             } else {
-                return compute_undirected_triangles(graph)->
-                            conv2std<vertex_id_t>();
+                return compute_undirected_triangles(graph);
             }
         }
 
         // Local scan
         std::vector<size_t> local_scan(const short num_hops=1) {
             if (num_hops == 1)
-                return compute_local_scan(graph)->conv2std<size_t>();
+                return compute_local_scan(graph);
             else if (num_hops == 2)
-                return compute_local_scan2(graph)->conv2std<size_t>();
+                return compute_local_scan2(graph);
             else
                 throw std::runtime_error(
                         "local_scan: num_hops must be 1 or 2\n");
@@ -142,10 +131,10 @@ class CGraph {
 
             if (algo == "pull") {
                 return compute_pagerank(graph, num_iters,
-                        damping_factor)->conv2std<float>();
+                        damping_factor);
             } else { /* Default */
                 return compute_pagerank2(graph, num_iters,
-                        damping_factor)->conv2std<float>();
+                        damping_factor);
             }
         }
 
@@ -153,20 +142,20 @@ class CGraph {
         std::vector<vertex_id_t> weakly_connected_components(
                 const bool sync=false) {
             if (sync) {
-                return compute_sync_wcc(graph)->conv2std<vertex_id_t>();
+                return compute_sync_wcc(graph);
             } else {
-                return compute_wcc(graph)->conv2std<vertex_id_t>();
+                return compute_wcc(graph);
             }
         }
 
         // Connected Components
         std::vector<vertex_id_t> connected_components() {
-            return compute_cc(graph)->conv2std<vertex_id_t>();
+            return compute_cc(graph);
         }
 
         // Strongly Connected Components
         std::vector<vertex_id_t> strongly_connected_components() {
-            return compute_scc(graph)->conv2std<vertex_id_t>();
+            return compute_scc(graph);
         }
 
         // bfs
@@ -192,5 +181,4 @@ class CGraph {
         }
 };
 }
-
 #endif

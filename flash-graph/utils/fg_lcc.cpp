@@ -8,6 +8,7 @@
 
 using namespace fm;
 
+/*
 std::pair<fg::vertex_id_t, size_t> get_max_cid(fm::vector::ptr cc_ids)
 {
 	fm::col_vec::ptr vec = fm::col_vec::create(cc_ids);
@@ -33,6 +34,7 @@ std::pair<fg::vertex_id_t, size_t> get_max_cid(fm::vector::ptr cc_ids)
 	fg::vertex_id_t id = ids->get<fg::vertex_id_t>(idx);
 	return std::pair<fg::vertex_id_t, size_t>(id, max_size);
 }
+*/
 
 int main(int argc, char *argv[])
 {
@@ -50,6 +52,7 @@ int main(int argc, char *argv[])
 	fg::graph_engine::init_flash_graph(configs);
 	init_flash_matrix(configs);
 
+    /*
 	fg::FG_graph::ptr g = fg::FG_graph::create(graph_file, index_file, configs);
 	fg::vertex_index::ptr vindex = g->get_index_data();
 	printf("The graph has %ld vertices and %ld edges\n",
@@ -81,4 +84,5 @@ int main(int argc, char *argv[])
 
 	destroy_flash_matrix();
 	fg::graph_engine::destroy_flash_graph();
+    */
 }

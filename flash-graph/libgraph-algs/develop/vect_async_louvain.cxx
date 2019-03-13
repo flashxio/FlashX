@@ -149,7 +149,7 @@ class louvain_vertex: public compute_vertex
 	void run_on_message(vertex_program &prog, const vertex_message &msg1);
 
 	void compute_modularity(cluster_id_t neigh_cluster_id, vertex_id_t my_id);
-	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
 		vertex_program &prog);
 	void compute_per_cluster_vol_weight(vertex_program &prog);
 
@@ -158,7 +158,7 @@ class louvain_vertex: public compute_vertex
 		return cluster_id;
 	}
 
-	// Remove vertex from old cluster 
+	// Remove vertex from old cluster
 	void leave_cluster() {
 		g_weight_vec[cluster_id].minus_eq(weight);
 		g_volume_vec[cluster_id].minus_eq(volume);
@@ -228,7 +228,7 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 		case INIT: /* INIT just accums the global edge_count */
 			{
 				// Out edges
-				data_seq_iterator weight_it = 
+				data_seq_iterator weight_it =
 					((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
 				compute_per_vertex_vol_weight(weight_it, id_it, prog);
@@ -247,7 +247,7 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
 				cluster_message out_msg(this->cluster_id);
 				prog.multicast_msg(id_it, out_msg);
-				 
+
 				// In edges
 				id_it = vertex.get_neigh_seq_it(IN_EDGE);
 				cluster_message in_msg(this->cluster_id);
@@ -260,9 +260,9 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 }
 
 void louvain_vertex::run_on_message(vertex_program &prog, const vertex_message &msg1) {
-	
+
 	const cluster_message& msg = (const cluster_message& ) msg1;
-	if (msg.get_sender_cluster_id() == cluster_id) { 
+	if (msg.get_sender_cluster_id() == cluster_id) {
 		return; // Ignore since my cluster will not change
 	} else {
 		// This may update the cluster and modularity values
@@ -275,18 +275,18 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 
 #if 0
 	/** DEBUG **/
-	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id << 
+	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id <<
 		" ==> (vol="<< g_volume_vec[cluster_id] << ", wgt=" << g_weight_vec[cluster_id] << ")" <<
 		"processing neigh in cluster: (vol=" << g_volume_vec[neigh_cluster_id] << ", wgt=" <<
-		g_weight_vec[neigh_cluster_id] << ")"; 
+		g_weight_vec[neigh_cluster_id] << ")";
 	/** GUBED **/
 #endif
-	
+
 	// TODO: Remove divisions & hope for no overflow // FIXME: This maybe racey becuase of multiple accesses.
 	float delta_mod = ((g_weight_vec[neigh_cluster_id].get() - (g_weight_vec[this->cluster_id].get() - this->weight))
 			/ (float) g_edge_weight) +
 
-		(((int)((g_volume_vec[this->cluster_id].get() - this->volume) - g_volume_vec[neigh_cluster_id].get()) 
+		(((int)((g_volume_vec[this->cluster_id].get() - this->volume) - g_volume_vec[neigh_cluster_id].get())
 		  * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
 
 	if (delta_mod > this->max_modularity) {
@@ -296,7 +296,7 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 		   << neigh_cluster_id << ", delta_mod = "<< delta_mod << "\n";
 		/** GUBED **/
 #endif
-		// Remove vertex from the old cluster 
+		// Remove vertex from the old cluster
 		leave_cluster();
 
 		max_modularity = delta_mod;
@@ -314,7 +314,7 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 }
 
 // Only need to do this once per vertex ever
-void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
 		vertex_program &prog) {
 	edge_count local_edge_weight = 0;
 	uint32_t self_edge_weight = 0;
@@ -340,7 +340,7 @@ void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it,
 }
 }
 
-namespace fg 
+namespace fg
 {
 	void compute_louvain(FG_graph::ptr fg, const uint32_t levels)
 	{
@@ -363,7 +363,7 @@ namespace fg
 		g_volume_vec.resize(graph->get_num_vertices(), atomicwrapper<uint32_t>(0));
 
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute Vol & Weight ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-		graph->start_all(vertex_initializer::ptr(), 
+		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 		graph->wait4complete();
 
@@ -372,7 +372,7 @@ namespace fg
 		graph->get_vertex_programs(ec_progs);
 		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
 			louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
-			g_edge_weight += lvp->get_local_ec(); 
+			g_edge_weight += lvp->get_local_ec();
 		}
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
 
@@ -380,16 +380,15 @@ namespace fg
 		do {
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++ 
+			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++
 				<< " ********************************\x1B[0m\n\n";
 
 #if 1
 			/** DEBUG **/
-			FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
-					graph->get_num_vertices());
-			graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
+            std::vector<cluster_id_t> ret(graph->get_num_vertices());
+			graph->query_on_all(vertex_query::ptr(
+                        new save_query<cluster_id_t, louvain_vertex>(ret)));
 			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
-			ret->print(); 
 			/** GUBED **/
 #endif
 #if 1
@@ -403,7 +402,7 @@ namespace fg
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 			/** GUBED **/
 
-			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); } 
+			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); }
 			/** GUBED **/
 #endif
 
@@ -414,16 +413,15 @@ namespace fg
 
 #if 1
 		/** DEBUG **/
-		FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
-				graph->get_num_vertices());
-		graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
+        std::vector<cluster_id_t> ret (graph->get_num_vertices());
+		graph->query_on_all(vertex_query::ptr(
+                    new save_query<cluster_id_t, louvain_vertex>(ret)));
 		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
-		ret->print(); 
 		/** GUBED **/
 #endif
 
 		louvain_stage = REBUILD; // TODO: Do something here
-		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n"; 
+		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n";
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER

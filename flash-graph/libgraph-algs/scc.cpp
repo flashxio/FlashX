@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "save_result.h"
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
@@ -1106,18 +1107,16 @@ public:
 
 }
 
-#include "save_result.h"
-
 namespace fg
 {
 
-fm::vector::ptr compute_scc(FG_graph::ptr fg)
+std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return fm::vector::ptr();
+        return std::vector<vertex_id_t>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1279,12 +1278,10 @@ fm::vector::ptr compute_scc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<vertex_id_t>());
+    std::vector<vertex_id_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<vertex_id_t, scc_vertex>(res_store)));
-	return fm::vector::create(res_store);
+				new save_query<vertex_id_t, scc_vertex>(res)));
+	return res;
 }
 
 }

@@ -197,21 +197,21 @@ void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
 namespace fg
 {
 
-fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return fm::vector::ptr();
+        return std::vector<float>();
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		BOOST_LOG_TRIVIAL(fatal)
 			<< "Damping factor must be between 0 and 1 inclusive";
-		return fm::vector::ptr();
+        return std::vector<float>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(
@@ -237,11 +237,9 @@ fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<float>());
+    std::vector<float> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<float, pgrank_vertex>(res_store)));
+				new save_query<float, pgrank_vertex>(res)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -251,24 +249,24 @@ fm::vector::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("It takes %1% seconds in total")
 		% time_diff(start, end);
-	return fm::vector::create(res_store);
+    return res;
 }
 
-fm::vector::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
+std::vector<float> compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "This algorithm works on a directed graph";
-		return fm::vector::ptr();
+        return std::vector<float>();
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		BOOST_LOG_TRIVIAL(fatal)
 			<< "Damping factor must be between 0 and 1 inclusive";
-		return fm::vector::ptr();
+        return std::vector<float>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(
@@ -290,11 +288,9 @@ fm::vector::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-			fg->get_num_vertices(), safs::params.get_num_nodes(),
-			fm::get_scalar_type<float>());
+    std::vector<float> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new save_query<float, pgrank_vertex2>(res_store)));
+				new save_query<float, pgrank_vertex2>(res)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -304,7 +300,7 @@ fm::vector::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("It takes %1% seconds in total")
 		% time_diff(start, end);
-	return fm::vector::create(res_store);
+	return res;
 }
 
 }

@@ -86,7 +86,7 @@ class cluster
 };
 
 std::ostream& operator<< (std::ostream& ost, const cluster& clust) {
-	ost << "(vol:" << clust.get_volume() << ", wgt:" 
+	ost << "(vol:" << clust.get_volume() << ", wgt:"
 		<< clust.get_weight() << "), ";
 	return ost;
 }
@@ -158,7 +158,7 @@ class louvain_vertex: public compute_vertex
 	void run_on_message(vertex_program &prog, const vertex_message &msg1);
 
 	void compute_modularity(cluster_id_t neigh_cluster_id, vertex_id_t my_id);
-	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+	void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
 		vertex_program &prog);
 	void compute_per_cluster_vol_weight(vertex_program &prog);
 
@@ -255,7 +255,7 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 		case INIT: /* INIT just accums the global edge_count */
 			{
 				// Out edges
-				data_seq_iterator weight_it = 
+				data_seq_iterator weight_it =
 					((const page_directed_vertex&)vertex).get_data_seq_it<edge_count>(OUT_EDGE);
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
 				compute_per_vertex_vol_weight(weight_it, id_it, prog);
@@ -274,7 +274,7 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 				edge_seq_iterator id_it = vertex.get_neigh_seq_it(OUT_EDGE);
 				cluster_message out_msg(this->cluster_id);
 				prog.multicast_msg(id_it, out_msg);
-				
+
 				// In edges
 				id_it = vertex.get_neigh_seq_it(IN_EDGE);
 				cluster_message in_msg(this->cluster_id);
@@ -290,9 +290,9 @@ void louvain_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 }
 
 void louvain_vertex::run_on_message(vertex_program &prog, const vertex_message &msg1) {
-	
+
 	const cluster_message& msg = (const cluster_message& ) msg1;
-	if (msg.get_sender_cluster_id() == cluster_id) { 
+	if (msg.get_sender_cluster_id() == cluster_id) {
 		return; // Ignore since my cluster will not change
 	} else {
 		// This may update the cluster and modularity values
@@ -309,15 +309,15 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 
 #if 0
 	/** DEBUG **/
-	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id << 
-		" ==> " << curr_cluster << "processing neigh in cluster: " << neigh_cluster; 
+	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id <<
+		" ==> " << curr_cluster << "processing neigh in cluster: " << neigh_cluster;
 	/** GUBED **/
 #endif
-	
+
 	// TODO: Remove divisions & hope for no overflow
 	float delta_mod = ((neigh_cluster.get_weight() - (curr_cluster.get_weight()-this->weight))
 			/ (float) g_edge_weight) +
-		(((int)((curr_cluster.get_volume() - this->volume) - neigh_cluster.get_volume()) 
+		(((int)((curr_cluster.get_volume() - this->volume) - neigh_cluster.get_volume())
 		  * (int)this->volume) / (float)(2*(g_edge_weight*g_edge_weight)));
 
 	if (delta_mod > this->max_modularity) {
@@ -335,7 +335,7 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 }
 
 // Only need to do this once per vertex ever
-void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it, 
+void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
 		vertex_program &prog) {
 	edge_count local_edge_weight = 0;
 	uint32_t self_edge_weight = 0;
@@ -357,14 +357,14 @@ void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it,
 	this->weight += local_edge_weight.get_count() + self_edge_weight;
 
 	// Add this for the cluster
-	((louvain_vertex_program&)prog).update(this->cluster_id, local_edge_weight.get_count() + 
+	((louvain_vertex_program&)prog).update(this->cluster_id, local_edge_weight.get_count() +
 		(2*self_edge_weight), local_edge_weight.get_count() + self_edge_weight);
 }
 
 //  Does not require edgelist
 void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
-	//BOOST_LOG_TRIVIAL(info) << "v"<< prog.get_vertex_id(*this) << ", " << "c" << cluster_id 
-		//<< " += vol: " << volume << ", += wgt: " << weight; 
+	//BOOST_LOG_TRIVIAL(info) << "v"<< prog.get_vertex_id(*this) << ", " << "c" << cluster_id
+		//<< " += vol: " << volume << ", += wgt: " << weight;
 	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
 }
 
@@ -409,7 +409,7 @@ void prune_merge_map (std::map<T, U>& add_map, std::map<T, U>& agg_map,
 }
 
 // FIXME: Building this is serial and likely already slow to
-// FIXME: Remove accum_edges eventually 
+// FIXME: Remove accum_edges eventually
 void build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 	std::vector<vertex_program::ptr> ec_progs;
@@ -425,13 +425,13 @@ void build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 		prune_merge_map(lvp->get_cluster_map(), g_cluster_map, merge_func);
 
-		// Merging this clustermap 
+		// Merging this clustermap
 		g_cluster_map.insert(lvp->get_cluster_map().begin(), lvp->get_cluster_map().end());
 	}
 }
 
 // TODO: Opt -- eliminate memory copies
-// TODO: Opt -- omp opts - schedule, loop unroll etc.. 
+// TODO: Opt -- omp opts - schedule, loop unroll etc..
 #if 0
 void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 	std::vector<vertex_program::ptr> ec_progs;
@@ -456,7 +456,7 @@ void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 	//#pragma omp parallel for
 	for (uint32_t i = 0; i < ec_progs.size()-1; i+=2) {
 
-		merged_maps[i/2] = prune_merge_map(louvain_vertex_program::cast2(ec_progs[i])->get_cluster_map(), 
+		merged_maps[i/2] = prune_merge_map(louvain_vertex_program::cast2(ec_progs[i])->get_cluster_map(),
 								louvain_vertex_program::cast2(ec_progs[i+1])->get_cluster_map(), merge_func);
 		if (i == 0 && (ec_progs.size() % 2 != 0)) { // Handle odd # of threads in the first merge iteration
 			merged_maps[i/2] = prune_merge_map(louvain_vertex_program::cast2(ec_progs.back())->get_cluster_map(),
@@ -467,15 +467,15 @@ void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 	while (merged_maps.size() > 1) {
 		//#pragma omp parallel for
 		for(uint32_t i = 0; i < merged_maps.size()-1; i+=2) {
-			merged_maps[i/2] = prune_merge_map(merged_maps[i], 
+			merged_maps[i/2] = prune_merge_map(merged_maps[i],
 					merged_maps[i+1], merge_func);
 		}
 
 		if ((merged_maps.size() / 2) % 2 != 0) {
-			merged_maps[0] = prune_merge_map(merged_maps[0], 
+			merged_maps[0] = prune_merge_map(merged_maps[0],
 					merged_maps[(merged_maps.size()/2)-1], merge_func);
 		}
-		merged_maps.erase(merged_maps.begin() + (merged_maps.size()/2), 
+		merged_maps.erase(merged_maps.begin() + (merged_maps.size()/2),
 				merged_maps.end()); // Get rid of the back end of the vector
 	}
 }
@@ -483,7 +483,7 @@ void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 }
 
-namespace fg 
+namespace fg
 {
 	void compute_louvain(FG_graph::ptr fg, const uint32_t levels)
 	{
@@ -502,10 +502,10 @@ namespace fg
 		gettimeofday(&start, NULL);
 
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute Vol & Weight ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-		graph->start_all(vertex_initializer::ptr(), 
+		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 		graph->wait4complete();
-		
+
 		build_global_cluster_map(graph, true);
 
 		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
@@ -522,16 +522,15 @@ namespace fg
 		do {
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++ 
+			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++
 												<< " ********************************\x1B[0m\n\n";
 
 #if 1
 			/** DEBUG **/
-			FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
-					graph->get_num_vertices());
-			graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
+            std::vector<cluster_id_t> ret (graph->get_num_vertices());
+			graph->query_on_all(vertex_query::ptr(
+                        new save_query<cluster_id_t, louvain_vertex>(ret)));
 			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
-			ret->print(); 
 #endif
 #if 1
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
@@ -540,18 +539,18 @@ namespace fg
 			print_cluster_map_sum(g_cluster_map);
 			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
 
-			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); } 
+			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); }
 			/** GUBED **/
 #endif
 
 			set_changed(false);
-			graph->start_all(vertex_initializer::ptr(), 
+			graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 			graph->wait4complete();
 			g_cluster_map.clear(); // TODO: Opt
 		/*~~~~~~~~~~~~~~~~~~~ Update per thread then global cluster maps ~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = UPDATE_CLUSTERS;
-			graph->start_all(vertex_initializer::ptr(), 
+			graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 			graph->wait4complete();
 
@@ -561,16 +560,15 @@ namespace fg
 
 #if 1
 		/** DEBUG **/
-		FG_vector<cluster_id_t>::ptr ret = FG_vector<cluster_id_t>::create(
-				graph->get_num_vertices());
-		graph->query_on_all(vertex_query::ptr(new save_query<cluster_id_t, louvain_vertex>(ret)));
+        std::vector<cluster_id_t> ret(graph->get_num_vertices());
+		graph->query_on_all(vertex_query::ptr(
+                    new save_query<cluster_id_t, louvain_vertex>(ret)));
 		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
-		ret->print(); 
 		/** GUBED **/
 #endif
 
 		louvain_stage = REBUILD; // TODO: Do something here
-		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n"; 
+		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n";
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER

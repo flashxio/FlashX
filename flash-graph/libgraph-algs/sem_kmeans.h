@@ -28,7 +28,6 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
-#include "save_result.h"
 
 using namespace fg;
 
@@ -152,12 +151,12 @@ namespace fg
     class sem_kmeans_ret
     {
         private:
-			fm::vector::ptr cluster_assignments;
+            std::vector<unsigned> cluster_assignments;
             std::vector<std::vector<double>> centers;
             std::vector<unsigned> size;
             unsigned iters;
 
-            sem_kmeans_ret(fm::vector::ptr cluster_assignments,
+            sem_kmeans_ret(std::vector<unsigned> cluster_assignments,
                     const std::vector<std::vector<double>> centers,
                     const std::vector<unsigned>& size, const unsigned iters) {
                 this->cluster_assignments = cluster_assignments;
@@ -169,13 +168,13 @@ namespace fg
         public:
             typedef typename std::shared_ptr<sem_kmeans_ret> ptr;
 
-            static ptr create(fm::vector::ptr cluster_assignments,
+            static ptr create(std::vector<unsigned> cluster_assignments,
                     const std::vector<std::vector<double>> centers,
                     const std::vector<unsigned>& size, const unsigned iters) {
                 return ptr(new sem_kmeans_ret(cluster_assignments, centers, size, iters));
             }
 
-            fm::vector::ptr get_cluster_assignments() const {
+            const std::vector<unsigned>& get_cluster_assignments() const {
                 return this->cluster_assignments;
             }
 

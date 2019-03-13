@@ -22,6 +22,7 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include "save_result.h"
 
 #define KM_TEST 0
 #define VERBOSE 0
@@ -83,7 +84,7 @@ namespace {
         printf("V%u's vector: ", my_id); print_vector<std::string>(v);
     }
     // End helpers //
-#endif 
+#endif
 
     class kmeans_vertex: public compute_vertex
     {
@@ -347,12 +348,11 @@ namespace {
         this->dist = best;
     }
 
-    static fm::vector::ptr get_membership(graph_engine::ptr mat) {
-		fm::detail::mem_vec_store::ptr res_store = fm::detail::mem_vec_store::create(
-				mat->get_num_vertices(), safs::params.get_num_nodes(),
-				fm::get_scalar_type<unsigned>());
-        mat->query_on_all(vertex_query::ptr(new save_query<unsigned, kmeans_vertex>(res_store)));
-        return fm::vector::create(res_store);
+    static std::vector<unsigned> get_membership(graph_engine::ptr mat) {
+		std::vector<unsigned> res(mat->get_num_vertices());
+        mat->query_on_all(vertex_query::ptr(new save_query<unsigned,
+                    kmeans_vertex>(res)));
+        return res;
     }
 
     static void clear_clusters() {
@@ -594,7 +594,7 @@ namespace fg
 
         std::vector<std::vector<double>> means;
         get_means(means);
-		fm::vector::ptr cluster_assignments = get_membership(mat);
+		auto cluster_assignments = get_membership(mat);
 
         return sem_kmeans_ret::create(cluster_assignments, means, num_members_v, g_iter);
     }

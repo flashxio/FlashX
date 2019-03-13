@@ -46,6 +46,7 @@
 
 using namespace fm;
 
+#if 0
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
@@ -58,9 +59,11 @@ void print_usage()
 	fprintf(stderr, "-t type: the edge attribute type\n");
 	fprintf(stderr, "-d delim: specified the string as delimiter\n");
 }
+#endif
 
 int main(int argc, char *argv[])
 {
+#if 0
 	bool directed = true;
 	bool in_mem = true;
 	bool uniq_edge = false;
@@ -169,6 +172,6 @@ int main(int argc, char *argv[])
 			graph->get_graph_data()->dump(adj_file);
 	}
 	destroy_flash_matrix();
-
+#endif
 	return 0;
 }
