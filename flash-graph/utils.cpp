@@ -33,14 +33,10 @@
 #include "safs_exception.h"
 #include "comm_exception.h"
 
-//#include "edge_type.h"
 #include "vertex.h"
 #include "in_mem_storage.h"
 #include "utils.h"
 #include "vertex_index_constructor.h"
-
-#include "data_io.h"
-#include "data_frame.h"
 
 using namespace safs;
 
@@ -503,6 +499,7 @@ mem_serial_graph::ptr mem_serial_graph::create(bool directed,
 		return mem_serial_graph::ptr(new mem_undirected_graph(edge_data_size));
 }
 
+#if 0
 fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim, const std::string &edge_attr_type,
 		bool directed)
@@ -528,6 +525,7 @@ fm::data_frame::ptr read_edge_list(const std::vector<std::string> &files,
 	return fm::read_data_frame(files, in_mem, false, delim, ele_parsers,
 			dup_idxs);
 }
+#endif
 
 }
 

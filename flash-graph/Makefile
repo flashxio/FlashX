@@ -17,9 +17,9 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I../libsafs -I../matrix
+CXXFLAGS += -I../libsafs
 
-all: libgraph unit-test tools matrix libgraph-algs utils test-algs # bindings
+all: libgraph unit-test tools libgraph-algs test-algs bindings utils
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -34,13 +34,10 @@ tools: libgraph
 unit-test: libgraph
 	$(MAKE) -C unit-test
 
-#bindings: libgraph libgraph-algs matrix
-	#$(MAKE) -C bindings
+bindings: libgraph libgraph-algs
+	$(MAKE) -C bindings
 
-matrix: libgraph
-	$(MAKE) -C matrix
-
-test-algs: libgraph libgraph-algs matrix
+test-algs: libgraph libgraph-algs
 	$(MAKE) -C test-algs
 
 utils: libgraph libgraph-algs
@@ -54,10 +51,9 @@ clean:
 	find -name core -delete
 	$(MAKE) clean -C tools
 	$(MAKE) clean -C unit-test
-	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
 	$(MAKE) clean -C utils
-	#$(MAKE) clean -C bindings
+	$(MAKE) clean -C bindings
 
 -include $(DEPS)

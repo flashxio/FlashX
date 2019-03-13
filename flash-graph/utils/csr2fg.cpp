@@ -22,14 +22,6 @@
 #include "in_mem_storage.h"
 #include "fg_utils.h"
 
-#include "factor.h"
-#include "mem_vec_store.h"
-#include "vector_vector.h"
-#include "local_vv_store.h"
-#include "sparse_matrix.h"
-
-using namespace fm;
-
 typedef off_t row_ptr_t;
 typedef int col_idx_t;
 

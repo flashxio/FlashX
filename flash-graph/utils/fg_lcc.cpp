@@ -1,12 +1,7 @@
 #include "FGlib.h"
 #include "in_mem_storage.h"
 
-#include "sparse_matrix.h"
 #include "fg_utils.h"
-
-#include "col_vec.h"
-
-using namespace fm;
 
 /*
 std::pair<fg::vertex_id_t, size_t> get_max_cid(fm::vector::ptr cc_ids)
@@ -50,9 +45,9 @@ int main(int argc, char *argv[])
 
 	config_map::ptr configs = config_map::create(conf_file);
 	fg::graph_engine::init_flash_graph(configs);
+    /*
 	init_flash_matrix(configs);
 
-    /*
 	fg::FG_graph::ptr g = fg::FG_graph::create(graph_file, index_file, configs);
 	fg::vertex_index::ptr vindex = g->get_index_data();
 	printf("The graph has %ld vertices and %ld edges\n",
@@ -83,6 +78,6 @@ int main(int argc, char *argv[])
 	}
 
 	destroy_flash_matrix();
-	fg::graph_engine::destroy_flash_graph();
     */
+	fg::graph_engine::destroy_flash_graph();
 }

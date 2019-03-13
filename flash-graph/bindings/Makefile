@@ -14,10 +14,10 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L..\
-	-lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs \
+LDFLAGS := -L../libgraph-algs -lgraph-algs -L..\
+	-lgraph -lcblas -L../../libsafs -lsafs \
 	-lrt -lz $(LDFLAGS)
-CXXFLAGS += -I../../libsafs -I.. -I. -I../../matrix
+CXXFLAGS += -I../../libsafs -I.. -I.
 
 all: testit
 

@@ -20,87 +20,12 @@
 
 #include "vertex_index.h"
 
-#include "vector_vector.h"
-#include "crs_header.h"
-#include "local_vec_store.h"
-
-using namespace fm;
-
 void read_data(char *data, size_t size, size_t num, off_t off, FILE *stream)
 {
 	int iret = fseek(stream, off, SEEK_SET);
 	assert(iret == 0);
 	size_t ret = fread(data, size, num, stream);
 	assert(ret == num);
-}
-
-class adj2crs_apply_operate: public arr_apply_operate
-{
-public:
-	virtual void run(const local_vec_store &in,
-			local_vec_store &out) const;
-
-	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<char>();
-	}
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<crs_idx_t>();
-	}
-	virtual size_t get_num_out_eles(size_t num_input) const {
-		return 0;
-	}
-};
-
-void adj2crs_apply_operate::run(const local_vec_store &in,
-		local_vec_store &out) const
-{
-	const fg::ext_mem_undirected_vertex *v
-		= (const fg::ext_mem_undirected_vertex *) in.get_raw_arr();
-	size_t num_edges = v->get_num_edges();
-	out.resize(num_edges);
-	for (size_t i = 0; i < num_edges; i++)
-		out.set<crs_idx_t>(i, v->get_neighbor(i));
-}
-
-void export_crs(vector_vector::ptr adjs, const std::string &output_file)
-{
-	vector_vector::ptr col_idxs = vector_vector::cast(
-			adjs->apply(adj2crs_apply_operate()));
-	vector::ptr col_vec = col_idxs->cat();
-	std::vector<crs_idx_t> offs(adjs->get_num_vecs() + 1);
-	for (size_t i = 0; i < adjs->get_num_vecs(); i++) {
-		offs[i + 1] = offs[i] + col_idxs->get_length(i);
-	}
-
-	FILE *f = fopen(output_file.c_str(), "w");
-	if (f == NULL) {
-		fprintf(stderr, "can't open %s: %s\n", output_file.c_str(), strerror(errno));
-		exit(1);
-	}
-
-	// This is an adjacency matrix of a graph, so it has the same number of
-	// rows and columns.
-	crs_header header(adjs->get_num_vecs(), adjs->get_num_vecs(),
-			col_vec->get_length());
-	size_t ret = fwrite(&header, sizeof(header), 1, f);
-	if (ret == 0) {
-		fprintf(stderr, "can't write header: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	ret = fwrite(offs.data(), offs.size() * sizeof(offs[0]), 1, f);
-	if (ret == 0) {
-		fprintf(stderr, "can't write the row pointers: %s\n", strerror(errno));
-		exit(1);
-	}
-	ret = fwrite(dynamic_cast<const detail::mem_vec_store &>(col_vec->get_data()).get_raw_arr(),
-			col_vec->get_length() * col_vec->get_entry_size(), 1, f);
-	if (ret == 0) {
-		fprintf(stderr, "can't write col idx: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	fclose(f);
 }
 
 int main(int argc, char *argv[])
@@ -123,6 +48,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+#if 0
+    // TODO
 	size_t out_size = fg::get_out_size(vindex);
 	off_t out_off = fg::get_out_off(vindex);
 	detail::simple_raw_array out_data(out_size, -1);
@@ -153,6 +80,6 @@ int main(int argc, char *argv[])
 
 		export_crs(in_adjs, t_crs_file);
 	}
-
 	fclose(f);
+#endif
 }

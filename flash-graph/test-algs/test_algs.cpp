@@ -23,14 +23,9 @@
 #endif
 
 #include <algorithm>
+#include <numeric>
 #include "FGlib.h"
 #include "ts_graph.h"
-#include "sparse_matrix.h"
-#include "libgraph-algs/sem_kmeans.h"
-
-#include "vector.h"
-#include "col_vec.h"
-#include "data_frame.h"
 
 using namespace fg;
 
@@ -670,41 +665,6 @@ void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 }
 #endif
 
-void run_sem_kmeans(FG_graph::ptr graph, int argc, char *argv[])
-{
-	int opt;
-	int num_opts = 0;
-    unsigned k = 0;
-    unsigned max_iters = std::numeric_limits<unsigned>::max();
-    std::string init = "kmeanspp";
-    double tolerance = -1;
-
-	while ((opt = getopt(argc, argv, "k:i:t:l:c:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'k':
-				k = atol(optarg);
-				num_opts++;
-				break;
-			case 'i':
-                max_iters = atol(optarg);
-				break;
-			case 't':
-                init = optarg;
-				break;
-            case 'l':
-                tolerance = atof(optarg);
-                num_opts++;
-                break;
-			default:
-				print_usage();
-				abort();
-		}
-	}
-
-    compute_sem_kmeans(graph, k, init, max_iters, tolerance);
-}
-
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -722,7 +682,6 @@ std::string supported_algs[] = {
 	"overlap",
 	"bfs",
 	"louvain",
-    "sem_kmeans"
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -782,12 +741,6 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "louvain\n");
 	fprintf(stderr, "-l: how many levels in the hierarchy to compute\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "sem_kmeans\n");
-	fprintf(stderr, "-k: the number of clusters to use\n");
-	fprintf(stderr, "-i: max number of iterations\n");
-	fprintf(stderr, "-t: init type [random, forgy, kmeanspp]. Default: kmeanspp\n");
-	fprintf(stderr, "-l: convergence tolerance (defualt: -1 = no changes)\n");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
@@ -882,9 +835,6 @@ int main(int argc, char *argv[])
 		run_louvain(graph, argc, argv);
 	}
 #endif
-	else if (alg == "sem_kmeans") {
-		run_sem_kmeans(graph, argc, argv);
-	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
 	}

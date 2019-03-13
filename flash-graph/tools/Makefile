@@ -17,8 +17,8 @@
 
 include ../../Makefile.common
 
-LDFLAGS := -L.. -lgraph -L../../matrix -lFMatrix -lcblas -L../../libsafs -lsafs -lrt $(LDFLAGS) -lz
-CXXFLAGS += -I../../libsafs -I.. -I. -I../../matrix
+LDFLAGS := -L.. -lgraph -lcblas -L../../libsafs -lsafs -lrt $(LDFLAGS) -lz
+CXXFLAGS += -I../../libsafs -I.. -I.
 
 all: rmat-gen
 

@@ -19,12 +19,7 @@
 
 #include "fg_utils.h"
 #include "in_mem_storage.h"
-
-#include "factor.h"
-#include "generic_type.h"
-#include "data_frame.h"
 #include "fg_utils.h"
-#include "data_io.h"
 
 namespace fg
 {

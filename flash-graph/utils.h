@@ -166,9 +166,11 @@ public:
 	virtual void add_empty_vertex(vertex_id_t id) = 0;
 };
 
+#if 0
 std::shared_ptr<fm::data_frame> read_edge_list(const std::vector<std::string> &files,
 		bool in_mem, const std::string &delim, const std::string &edge_attr_type,
 		bool directed);
+#endif
 
 }
 

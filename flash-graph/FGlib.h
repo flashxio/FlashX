@@ -24,8 +24,6 @@
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
-#include "vector.h"
-
 namespace safs
 {
 	class file_io_factory;

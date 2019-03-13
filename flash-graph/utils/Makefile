@@ -1,7 +1,4 @@
 # Copyright 2016 Open Connectome Project (http://openconnecto.me)
-# Written by Da Zheng (zhengda1936@gmail.com)
-#
-# This file is part of FlashMatrix.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +14,9 @@
 
 include ../../Makefile.common
 
-CXXFLAGS += -I../../libsafs -I.. -I../../matrix
-LDFLAGS := -L../ -lgraph -L../../matrix -lFMatrix -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lz -lcblas #-lprofiler
+CXXFLAGS += -I../../libsafs -I..
+LDFLAGS := -L../ -lgraph -L../../libsafs -lsafs $(LDFLAGS)
+LDFLAGS += -lz -lcblas
 
 all: el2fg fg2fm fg2crs fg_lcc csr2fg
 

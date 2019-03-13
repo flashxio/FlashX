@@ -26,15 +26,6 @@
 
 #include "vertex_index.h"
 
-#include "vector_vector.h"
-#include "fm_utils.h"
-#include "fg_utils.h"
-#include "EM_vector.h"
-#include "mem_vec_store.h"
-#include "EM_vv_store.h"
-#include "mem_vv_store.h"
-#include "sparse_matrix.h"
-
 #if 0
 using namespace fm;
 void verify_2d_matrix(const std::string &mat_file,

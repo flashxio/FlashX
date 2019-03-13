@@ -36,14 +36,6 @@
 #include "utils.h"
 #include "fg_utils.h"
 
-#include "generic_type.h"
-#include "data_io.h"
-#include "data_frame.h"
-#include "vector.h"
-#include "vector_vector.h"
-#include "matrix_config.h"
-#include "sparse_matrix.h"
-
 using namespace fm;
 
 #if 0
