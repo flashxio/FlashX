@@ -1,8 +1,8 @@
-/*
+/**
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of FlashMatrix.
+ * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,153 +17,240 @@
  * limitations under the License.
  */
 
-#include <string.h>
-#include <assert.h>
-
-#include <vector>
-#include <string>
+#include <libgen.h>
 
 #include "common.h"
-
+#include "config_map.h"
 #include "native_file.h"
-#include "log.h"
-#include "FG_basic_types.h"
-#include "vertex.h"
-#include "graph_file_header.h"
-#include "vertex_index.h"
-#include "in_mem_storage.h"
-#include "FGlib.h"
+#include "io_interface.h"
+
 #include "utils.h"
-#include "fg_utils.h"
 
-using namespace fm;
+using namespace safs;
+using namespace fg;
 
-#if 0
+struct str2int_pair {
+	std::string str;
+	int number;
+};
+static struct str2int_pair edge_type_map[] = {
+	{"count", utils::EDGE_COUNT},
+	{"timestamp", utils::EDGE_TIMESTAMP},
+};
+static int type_map_size = sizeof(edge_type_map) / sizeof(edge_type_map[0]);
+
+static inline int conv_edge_type_str2int(const std::string &type_str)
+{
+	for (int i = 0; i < type_map_size; i++) {
+		if (edge_type_map[i].str == type_str) {
+			return edge_type_map[i].number;
+		}
+	}
+	return utils::DEFAULT_TYPE;
+}
+
+static bool check_graph = false;
+
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
-	fprintf(stderr, "el2al [options] conf_file edge_file graph_name\n");
+	fprintf(stderr,
+			"el2fg [options] adj_list_file index_file edge_list_files (or directories)\n");
 	fprintf(stderr, "-u: undirected graph\n");
-	fprintf(stderr, "-U: unqiue edges\n");
-	fprintf(stderr, "-e: use external memory\n");
-	fprintf(stderr, "-s size: sort buffer size\n");
-	fprintf(stderr, "-g size: groupby buffer size\n");
-	fprintf(stderr, "-t type: the edge attribute type\n");
-	fprintf(stderr, "-d delim: specified the string as delimiter\n");
+	fprintf(stderr, "-v: verify the created adjacency list\n");
+	fprintf(stderr, "-t type: the type of edge data. Supported type: ");
+	for (int i = 0; i < type_map_size; i++) {
+		fprintf(stderr, "%s, ", edge_type_map[i].str.c_str());
+	}
+	fprintf(stderr, "\n");
+	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
+	fprintf(stderr, "-w: write the graph to a file\n");
+	fprintf(stderr, "-T: the number of threads to process in parallel\n");
+	fprintf(stderr, "-d: store intermediate data on disks\n");
+	fprintf(stderr, "-c: the SAFS configuration file\n");
+	fprintf(stderr, "-W: the working directory\n");
+	fprintf(stderr, "-b: the size of the buffer for sorting edge lists\n");
+	fprintf(stderr, "-B: the size of the buffer for writing the graph\n");
 }
-#endif
 
 int main(int argc, char *argv[])
 {
-#if 0
-	bool directed = true;
-	bool in_mem = true;
-	bool uniq_edge = false;
-	size_t sort_buf_size = 1UL * 1024 * 1024 * 1024;
-	size_t groupby_buf_size = 1UL * 1024 * 1024 * 1024;
 	int opt;
+	int num_threads = 1;
+	bool directed = true;
 	int num_opts = 0;
-	std::string edge_attr_type;
-	std::string delim = "auto";
-	while ((opt = getopt(argc, argv, "uUes:g:t:d:")) != -1) {
+	char *type_str = NULL;
+	bool merge_graph = false;
+	bool write_graph = false;
+	bool on_disk = false;
+	size_t sort_buf_size = 0;
+	size_t write_buf_size = 0;
+	std::string conf_file;
+	std::string work_dir = ".";
+	while ((opt = getopt(argc, argv, "uvt:mwT:dc:W:b:B:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
 				directed = false;
 				break;
-			case 'U':
-				uniq_edge = true;
-				break;
-			case 'e':
-				in_mem = false;
-				break;
-			case 's':
-				sort_buf_size = str2size(optarg);
-				num_opts++;
-				break;
-			case 'g':
-				groupby_buf_size = str2size(optarg);
-				num_opts++;
+			case 'v':
+				check_graph = true;
 				break;
 			case 't':
-				edge_attr_type = optarg;
+				type_str = optarg;
+				num_opts++;
+				break;
+			case 'm':
+				merge_graph = true;
+				break;
+			case 'w':
+				write_graph = true;
+				break;
+			case 'T':
+				num_threads = atoi(optarg);
 				num_opts++;
 				break;
 			case 'd':
-				delim = optarg;
+				on_disk = true;
+				break;
+			case 'c':
+				conf_file = optarg;
+				num_opts++;
+				break;
+			case 'W':
+				work_dir = optarg;
+				num_opts++;
+				break;
+			case 'b':
+				sort_buf_size = str2size(optarg);
+				num_opts++;
+				break;
+			case 'B':
+				write_buf_size = str2size(optarg);
 				num_opts++;
 				break;
 			default:
 				print_usage();
-				exit(1);
+		}
+	}
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 3) {
+		print_usage();
+		exit(-1);
+	}
+
+	utils::set_num_threads(num_threads);
+	if (sort_buf_size > 0)
+		utils::set_sort_buf_size(sort_buf_size);
+	if (write_buf_size > 0)
+		utils::set_write_buf_size(write_buf_size);
+
+	int edge_attr_type = utils::DEFAULT_TYPE;
+	if (type_str) {
+		edge_attr_type = conv_edge_type_str2int(type_str);
+	}
+
+	std::string adjacency_list_file = argv[0];
+
+	std::string index_file = argv[1];
+	std::vector<std::string> edge_list_files;
+	for (int i = 2; i < argc; i++) {
+		native_dir dir(argv[i]);
+		if (dir.is_dir()) {
+			std::vector<std::string> files;
+			std::string dir_name = argv[i];
+			dir.read_all_files(files);
+			for (size_t i = 0; i < files.size(); i++)
+				edge_list_files.push_back(dir_name + "/" + files[i]);
+		}
+		else
+			edge_list_files.push_back(argv[i]);
+	}
+
+	utils::large_io_creator::ptr creator;
+	if (conf_file.empty())
+		creator = utils::large_io_creator::create(false, work_dir);
+	else {
+		config_map::ptr configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
+		safs::init_io_system(configs);
+		creator = utils::large_io_creator::create(true, ".");
+	}
+	if (merge_graph) {
+		utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
+				edge_attr_type, directed, !on_disk);
+		if (edge_g) {
+			utils::disk_serial_graph::ptr g
+				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+						utils::construct_graph(edge_g, creator));
+			// Write the constructed individual graph to a file.
+			if (write_graph) {
+				assert(!file_exist(adjacency_list_file));
+				assert(!file_exist(index_file));
+				g->dump(index_file, adjacency_list_file, true);
+			}
+			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
+					g->get_num_vertices(), g->get_num_non_empty_vertices(),
+					g->get_num_edges());
+			if (check_graph) {
+				struct timeval start, end;
+				gettimeofday(&start, NULL);
+				g->check_ext_graph(*edge_g, index_file,
+						creator->create_reader(adjacency_list_file));
+				gettimeofday(&end, NULL);
+				printf("verifying a graph takes %.2f seconds\n",
+						time_diff(start, end));
+			}
+		}
+	}
+	else {
+		std::vector<std::string> graph_files;
+		std::vector<std::string> index_files;
+		if (edge_list_files.size() > 1) {
+			for (size_t i = 0; i < edge_list_files.size(); i++) {
+				graph_files.push_back(adjacency_list_file + "-" + itoa(i));
+				index_files.push_back(index_file + "-" + itoa(i));
+			}
+		}
+		else {
+			graph_files.push_back(adjacency_list_file);
+			index_files.push_back(index_file);
+		}
+
+		for (size_t i = 0; i < edge_list_files.size(); i++) {
+			// construct individual graphs.
+			std::vector<std::string> files(1);
+			files[0] = edge_list_files[i];
+
+			utils::edge_graph::ptr edge_g = utils::parse_edge_lists(files,
+					edge_attr_type, directed, !on_disk);
+			if (edge_g == NULL)
+				continue;
+			utils::disk_serial_graph::ptr g
+				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+						utils::construct_graph(edge_g, creator));
+			// Write the constructed individual graph to a file.
+			if (write_graph) {
+				assert(!file_exist(graph_files[i]));
+				assert(!file_exist(index_files[i]));
+				g->dump(index_files[i], graph_files[i], true);
+			}
+			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
+					g->get_num_vertices(), g->get_num_non_empty_vertices(),
+					g->get_num_edges());
+			if (check_graph) {
+				struct timeval start, end;
+				gettimeofday(&start, NULL);
+				g->check_ext_graph(*edge_g, index_files[i],
+						creator->create_reader(graph_files[i]));
+				gettimeofday(&end, NULL);
+				printf("verifying a graph takes %.2f seconds\n",
+						time_diff(start, end));
+			}
 		}
 	}
 
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-	if (argc < 2) {
-		print_usage();
-		exit(1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string file_name = argv[1];
-	std::string graph_name = argv[2];
-	std::string adj_file = graph_name + ".adj";
-	std::string index_file = graph_name + ".index";
-
-	std::vector<std::string> files;
-	safs::native_file f(file_name);
-	if (f.exist() && !f.is_dir())
-		files.push_back(file_name);
-	else if (f.exist() && f.is_dir()) {
-		safs::native_dir d(file_name);
-		d.read_all_files(files);
-		for (size_t i = 0; i < files.size(); i++)
-			files[i] = file_name + "/" + files[i];
-	}
-	else {
-		fprintf(stderr, "The input file %s doesn't exist\n", file_name.c_str());
-		return -1;
-	}
-	printf("read edges from %ld files\n", files.size());
-
-	config_map::ptr configs = config_map::create(conf_file);
-	init_flash_matrix(configs);
-	matrix_conf.set_sort_buf_size(sort_buf_size);
-	matrix_conf.set_groupby_buf_size(groupby_buf_size);
-	printf("sort buf size: %ld, groupby buf size: %ld\n",
-			matrix_conf.get_sort_buf_size(), matrix_conf.get_groupby_buf_size());
-	fg::set_deduplicate(uniq_edge);
-
-	{
-		struct timeval start, end;
-		/*
-		 * We only need to indicate here whether we use external memory or not.
-		 * If the columns in the data frame are in external memory, it'll always
-		 * use external data containers for the remaining of processing.
-		 */
-		printf("start to read and parse edge list\n");
-		gettimeofday(&start, NULL);
-		data_frame::ptr df = fg::utils::read_edge_list(files, in_mem, delim,
-				edge_attr_type, directed);
-		assert(df);
-		gettimeofday(&end, NULL);
-		printf("It takes %.3f seconds to parse the edge lists\n",
-				time_diff(start, end));
-		printf("There are %ld edges\n", df->get_num_entries());
-		assert(df->get_num_entries() > 0);
-
-		fg::edge_list::ptr el = fg::edge_list::create(df, directed);
-		printf("start to construct FlashGraph graph\n");
-		fg::FG_graph::ptr graph = create_fg_graph(graph_name, el);
-
-		if (graph && graph->get_index_data())
-			graph->get_index_data()->dump(index_file);
-		if (graph && graph->get_graph_data())
-			graph->get_graph_data()->dump(adj_file);
-	}
-	destroy_flash_matrix();
-#endif
-	return 0;
+	if (is_safs_init())
+		destroy_io_system();
 }

@@ -18,16 +18,13 @@ CXXFLAGS += -I../../libsafs -I..
 LDFLAGS := -L../ -lgraph -L../../libsafs -lsafs $(LDFLAGS)
 LDFLAGS += -lz -lcblas
 
-all: el2fg fg2fm fg2crs fg_lcc csr2fg
+all: el2fg fg2crs fg_lcc csr2fg
 
 el2fg: el2fg.o ../libgraph.a
 	$(CXX) -o el2fg el2fg.o $(LDFLAGS)
 
 csr2fg: csr2fg.o ../libgraph.a
 	$(CXX) -o csr2fg csr2fg.o $(LDFLAGS)
-
-fg2fm: fg2fm.o ../libgraph.a
-	$(CXX) -o fg2fm fg2fm.o $(LDFLAGS)
 
 fg2crs: fg2crs.o ../libgraph.a
 	$(CXX) -o fg2crs fg2crs.o $(LDFLAGS)
@@ -39,4 +36,4 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f el2fg fg2fm fg2crs fg_lcc csr2fg
+	rm -f el2fg fg2crs fg_lcc csr2fg
