@@ -25,8 +25,6 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <vector>
-#include <boost/foreach.hpp>
-#include <boost/format.hpp>
 
 #include "log.h"
 #include "RAID_config.h"
@@ -139,7 +137,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	if (!configs->has_option("root_conf"))
 		throw init_error("RAID config file doesn't exist");
 	std::string root_conf_file = configs->get_option("root_conf");
-	BOOST_LOG_TRIVIAL(info) << "The root conf file: " << root_conf_file;
+	fprintf(stderr, "The root conf file: %s\n", root_conf_file.c_str());
 	RAID_config::ptr raid_conf = RAID_config::create(root_conf_file,
 			params.get_RAID_mapping_option(), params.get_RAID_block_size());
 	// If we can't initialize RAID, there is nothing we can do.
@@ -152,8 +150,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	std::set<int> disk_node_set = raid_conf->get_node_ids();
 	std::vector<int> disk_node_ids(disk_node_set.begin(), disk_node_set.end());
-	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% nodes with disks")
-		% disk_node_ids.size();
+	fprintf(stderr, "There are %lu nodes with disks", disk_node_ids.size());
 	init_aio(disk_node_ids);
 
 	file_mapper::ptr mapper = raid_conf->create_file_mapper();
@@ -227,9 +224,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 				}
 			}
 		}
-		BOOST_LOG_TRIVIAL(info) << boost::format(
-				"SAFS runs on %1% SSDs with %2% I/O threads") % num_files
-			% tot_num_threads;
+		fprintf(stderr, "SAFS runs on %d SSDs with %lu I/O threads\n",
+                num_files, tot_num_threads);
 		global_data.read_thread_set.insert(global_data.read_threads.begin(),
 				global_data.read_threads.end());
 #if 0
@@ -285,7 +281,7 @@ void destroy_io_system()
 		return;
 	}
 
-	BOOST_LOG_TRIVIAL(info) << "I/O system is destroyed";
+	fprintf(stderr, "I/O system is destroyed\n");
 	global_data.raid_conf.reset();
 	if (global_data.global_cache)
 		global_data.global_cache->sanity_check();
@@ -300,7 +296,7 @@ void destroy_io_system()
 	size_t num_writes = 0;
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
-	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
+	for (auto t : global_data.read_thread_set) {
 		if (t) {
 			num_reads += t->get_num_reads();
 			num_writes += t->get_num_writes();
@@ -311,17 +307,8 @@ void destroy_io_system()
 	global_data.read_threads.clear();
 	global_data.read_thread_set.clear();
 	destroy_aio();
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("I/O threads get %1% reads (%2% bytes) and %3% writes (%4% bytes)")
-		% num_reads % num_read_bytes % num_writes % num_write_bytes;
-
-#ifdef ENABLE_MEM_TRACE
-	BOOST_LOG_TRIVIAL(info) << boost::format("memleak: %1% objects and %2% bytes")
-		% get_alloc_objs() % get_alloc_bytes();
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("max: %1% objs and %2% bytes, max alloc %3% bytes")
-		% get_max_alloc_objs() % get_max_alloc_bytes() % get_max_alloc();
-#endif
+	printf("I/O threads get %lu reads (%lu bytes) and %lu writes (%lu bytes)\n",
+		num_reads, num_read_bytes, num_writes, num_write_bytes);
 }
 
 class posix_io_factory: public file_io_factory
@@ -410,8 +397,8 @@ public:
 	}
 
 	virtual void print_statistics() const {
-		BOOST_LOG_TRIVIAL(info) << boost::format("%1% gets %2% I/O accesses")
-			% mapper->get_name() % tot_accesses.load();
+		printf("%s gets %lu I/O accesses\n",
+			mapper->get_name().c_str(), tot_accesses.load());
 	}
 };
 
@@ -456,12 +443,12 @@ public:
 	}
 
 	virtual void print_statistics() const {
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("%1% gets %2% async I/O accesses, %3% in bytes")
-			% get_name() % tot_accesses.load() % tot_bytes.load();
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("There are %1% pages accessed, %2% cache hits, %3% of them are in the fast process")
-			% tot_pg_accesses.load() % tot_hits.load() % tot_fast_process.load();
+		printf("%s gets %lu async I/O accesses, %lu in bytes\n"
+		, get_name().c_str(), tot_accesses.load(), tot_bytes.load());
+		printf("There are %lu pages accessed, %lu cache hits, "
+                "%lu of them are in the fast process\n",
+			    tot_pg_accesses.load(), tot_hits.load(),
+                tot_fast_process.load());
 	}
 };
 
@@ -500,10 +487,9 @@ public:
 	}
 
 	virtual void print_statistics() const {
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("%1% gets %2% async I/O accesses, %3% req bytes, %4% disk bytes")
-			% get_name() % tot_accesses.load() % tot_req_bytes.load()
-			% tot_disk_bytes.load();
+        printf("%s gets %lu async I/O accesses, %lu req bytes, %lu disk bytes\n"
+			, get_name().c_str(), tot_accesses.load(), tot_req_bytes.load()
+			, tot_disk_bytes.load());
 	}
 };
 
@@ -689,17 +675,16 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		throw io_exception("safs isn't init");
 	safs_file f(get_sys_RAID_conf(), file_name);
 	if (!f.exist())
-		throw io_exception(boost::str(
-					boost::format("safs file %1% doesn't exist") % file_name));
+		throw io_exception(std::string("safs file ") +
+                file_name + std::string(" doesn't exist"));
 
 	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf->get_disk(i).get_file_name()
 			+ "/" + file_name;
 		native_file f(abs_path);
 		if (!f.exist())
-			throw io_exception((boost::format(
-							"the underlying file %1% doesn't exist")
-						% abs_path).str());
+		throw io_exception(std::string("the underlying file ") +
+                abs_path + std::string(" doesn't exist"));
 	}
 
 	file_mapper::ptr mapper = global_data.raid_conf->create_file_mapper(file_name);
@@ -750,7 +735,7 @@ io_interface::ptr create_io(file_io_factory::shared_ptr factory, thread *t)
 void print_io_thread_stat()
 {
 	sleep(1);
-	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
+	for (auto t : global_data.read_thread_set) {
 		if (t)
 			t->print_stat();
 	}
@@ -764,7 +749,7 @@ void print_io_summary()
 	size_t num_write_bytes = 0;
 
 	sleep(1);
-	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_thread_set) {
+	for (auto t : global_data.read_thread_set) {
 		if (t) {
 			num_reads += t->get_num_reads();
 			num_read_bytes += t->get_num_read_bytes();
@@ -772,7 +757,8 @@ void print_io_summary()
 			num_write_bytes += t->get_num_write_bytes();
 		}
 	}
-	printf("It reads %ld bytes (in %ld reqs) and writes %ld bytes (in %ld reqs)\n",
+	printf("It reads %ld bytes (in %ld reqs) and "
+            "writes %ld bytes (in %ld reqs)\n",
 			num_read_bytes, num_reads, num_write_bytes, num_writes);
 }
 

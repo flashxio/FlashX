@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-#include <boost/format.hpp>
-
 #include "log.h"
 #include "RAID_config.h"
 #include "file_mapper.h"
@@ -145,8 +143,8 @@ static int retrieve_data_files(std::string file_file,
 	int line_length;
 	FILE *fd = fopen(file_file.c_str(), "r");
 	if (fd == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open RAID conf file %1%: %2%")
-			% file_file % strerror(errno);
+		fprintf(stderr, "ERROR: open RAID conf file %s: %s\n",
+                file_file.c_str(), strerror(errno));
 		return 0;
 	}
 
@@ -173,22 +171,21 @@ static int retrieve_data_files(std::string file_file,
 		path_name.erase(std::remove_if(path_name.begin(), path_name.end(),
 					isspace), path_name.end());
 		if (path_name[0] != '/') {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"Absolute paths to SSDs are required. `%1%' isn't an absolute path")
-				% path_name;
+			fprintf(stderr,
+					"Absolute paths to SSDs are required. `%s' "
+                    "isn't an absolute path", path_name.c_str());
+
 			data_files.clear();
 			break;
 		}
 		native_dir dir(path_name);
 		if (!dir.exist()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("`%1%' doesn't exist") % path_name;
+			fprintf(stderr, "`%s' doesn't exist", path_name.c_str());
 			data_files.clear();
 			break;
 		}
 		if (!dir.is_dir()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("`%1%' isn't a directory") % path_name;
+			fprintf(stderr, "`%s' isn't a directory", path_name.c_str());
 			data_files.clear();
 			break;
 		}
@@ -220,7 +217,7 @@ RAID_config::ptr RAID_config::create(const std::string &conf_file,
 	else if (file_exist(conf_file) && is_dir(conf_file))
 		conf->root_paths.push_back(part_file_info(conf_file, 0, 0));
 	else {
-		BOOST_LOG_TRIVIAL(error) << conf_file << " doesn't exist";
+        fprintf(stderr, "`%s' doesn't exist", conf_file.c_str());
 		return RAID_config::ptr();
 	}
 

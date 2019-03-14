@@ -232,6 +232,8 @@ public:
 	void init(T *obj) {
 		T tmp;
 		*obj = tmp;
+        if (obj == &tmp)
+            ;
 	}
 };
 

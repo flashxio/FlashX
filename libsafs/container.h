@@ -28,7 +28,7 @@
 #include <limits.h>
 
 #include <string>
-#include <boost/assert.hpp>
+#include <cassert>
 
 #include "common.h"
 #include "concurrency.h"
@@ -260,7 +260,7 @@ class thread_safe_FIFO_queue;
 template<class T>
 class thread_safe_FIFO_queue: public fifo_queue<T>
 {
-	/* 
+	/*
 	 * lock is still needed because we need to check whether the buffer
 	 * has entries or has space.
 	 */
@@ -342,13 +342,13 @@ public:
 	 * of the queue.
 	 */
 	virtual void addByForce(T *entries, int num) {
-		BOOST_VERIFY(add(entries, num) == num);
+		assert(add(entries, num) == num);
 	}
 
 	// TODO I should return reference.
 	T pop_front() {
 		T entry;
-		BOOST_VERIFY(fetch(&entry, 1) == 1);
+		assert(fetch(&entry, 1) == 1);
 		return entry;
 	}
 
@@ -668,7 +668,7 @@ int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 #ifdef DEBUG
 			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 #endif
-			BOOST_VERIFY(fifo_queue<T>::expand_queue(new_size));
+			assert(fifo_queue<T>::expand_queue(new_size));
 		}
 		int ret = fifo_queue<T>::add(queue);
 		num_added += ret;

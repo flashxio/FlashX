@@ -33,18 +33,6 @@ enum c_log_level
 	fatal,
 };
 
-#ifdef USE_BOOST_LOG
-
-#include <boost/log/trivial.hpp>
-
-static inline void set_log_level(enum c_log_level level)
-{
-	boost::log::core::get()->set_filter(
-			boost::log::trivial::severity > boost::log::trivial::info);
-}
-
-#else
-
 class simple_log_stream
 {
 	static c_log_level curr_log_level;
@@ -88,6 +76,5 @@ static inline void set_log_level(enum c_log_level level)
 	simple_log_stream::set_global_log_level(level);
 }
 
-#endif
 
 #endif

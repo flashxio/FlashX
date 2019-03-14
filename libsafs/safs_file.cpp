@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-#include <boost/format.hpp>
-
 #include <limits.h>
 
 #include "log.h"
@@ -144,7 +142,7 @@ bool safs_file::resize(size_t new_size)
 
 	// Save the new file size to the header of the SAFS file.
 	std::string header_file = get_header_file();
-	BOOST_LOG_TRIVIAL(info) << "header file: " << header_file;
+	printf("header file: %s\n", header_file.c_str());
 	if (!file_exist(header_file))
 		return false;
 	FILE *f = fopen(header_file.c_str(), "r+");
@@ -425,7 +423,7 @@ public:
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
 		long new_off = lseek(fd, off, SEEK_SET);
-		BOOST_VERIFY(new_off == off);
+		assert(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
 		if (ret < 0)
 			perror("complete_read");
@@ -505,8 +503,7 @@ size_t get_all_safs_files(std::set<std::string> &files)
 			files.insert(*it);
 		}
 		else {
-			BOOST_LOG_TRIVIAL(error) << boost::format("%1% is corrupted")
-				% file.get_name();
+			fprintf(stderr, "%s is corrupted", file.get_name().c_str());
 		}
 	}
 	return 0;

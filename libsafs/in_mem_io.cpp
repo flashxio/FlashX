@@ -21,8 +21,6 @@
 #include <numa.h>
 #endif
 
-#include <boost/format.hpp>
-
 #include "in_mem_io.h"
 #include "slab_allocator.h"
 #include "native_file.h"
@@ -217,8 +215,8 @@ NUMA_buffer::ptr NUMA_buffer::load(const std::string &file_name,
 {
 	native_file local_f(file_name);
 	if (!local_f.exist())
-		throw io_exception(boost::str(
-					boost::format("Linux file %1% doesn't exist") % file_name));
+		throw io_exception(std::string("Linux file ") +\
+                file_name + " doesn't exist");
 
 	ssize_t file_size = local_f.get_size();
 	assert(file_size > 0);
@@ -228,8 +226,8 @@ NUMA_buffer::ptr NUMA_buffer::load(const std::string &file_name,
 	if (fd == NULL) {
 		int err = errno;
 		fclose(fd);
-		throw io_exception(boost::str(boost::format("can't open %1%: %2%")
-					% file_name % strerror(err)));
+		throw io_exception(std::string("can't open ") +
+					file_name + std::string(" ") + std::to_string(err));
 	}
 	for (off_t off = 0; off < file_size;) {
 		size_t load_size = std::min(mapper.get_range_size(),
@@ -239,11 +237,9 @@ NUMA_buffer::ptr NUMA_buffer::load(const std::string &file_name,
 		// the NUMA buffer size.
 		size_t size = std::min(data.second, (size_t) (file_size - off));
 		if (fread(data.first, size, 1, fd) != 1) {
-			int err = errno;
 			fclose(fd);
-			throw io_exception(boost::str(boost::format(
-							"can't read from %1%: %2%")
-						% file_name % strerror(err)));
+            throw io_exception(std::string("can't read from ") +
+                    file_name + std::string(":") + std::to_string(errno));
 		}
 		off += load_size;
 		if (off < file_size)
@@ -258,8 +254,8 @@ void NUMA_buffer::dump(const std::string &file_name)
 {
 	FILE *f = fopen(file_name.c_str(), "w");
 	if (f == NULL)
-		throw io_exception(boost::str(boost::format("can't open %1%: %2%")
-					% file_name % strerror(errno)));
+		throw io_exception(std::string("can't open ") +
+                file_name + std::string(":") + std::to_string(errno));
 
 	for (off_t off = 0; (size_t) off < get_length();) {
 		size_t write_size = std::min(mapper.get_range_size(),
@@ -269,11 +265,9 @@ void NUMA_buffer::dump(const std::string &file_name)
 		// the NUMA buffer size.
 		size_t size = std::min(data.second, get_length() - off);
 		if (fwrite(data.first, size, 1, f) != 1) {
-			int err = errno;
 			fclose(f);
-			throw io_exception(boost::str(boost::format(
-							"can't write to %1%: %2%")
-						% file_name % strerror(err)));
+            throw io_exception(std::string("can't write to ") +
+                    file_name + std::string(":") + std::to_string(errno));
 		}
 		off += write_size;
 		if ((size_t) off < get_length())

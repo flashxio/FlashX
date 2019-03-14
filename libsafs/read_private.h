@@ -45,7 +45,7 @@ public:
 
 	virtual ~buffered_io() {
 		for (unsigned i = 0; i < fds.size(); i++)
-			BOOST_VERIFY(close(fds[i]) == 0);
+			assert(close(fds[i]) == 0);
 	}
 
 	/* get the file descriptor corresponding to the offset. */

@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-#include <boost/format.hpp>
-
 #include "remote_access.h"
 #include "parameters.h"
 #include "slab_allocator.h"
@@ -71,7 +69,7 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 		assert(req_copies[i].get_io());
 	}
 
-	BOOST_VERIFY(complete_queue.add(req_copies.data(), num) == num);
+	assert(complete_queue.add(req_copies.data(), num) == num);
 	get_thread()->activate();
 }
 
@@ -172,17 +170,25 @@ void remote_io::access(io_request *requests, int num,
 		}
 
 		if (requests[i].get_access_method() == WRITE && !params.is_writable())
-			throw io_exception((boost::format(
-							"The I/O object can't write data. offset: %1%, size: %2%")
-						% requests[i].get_offset() % requests[i].get_size()).str());
+			throw io_exception(std::string("The I/O object can't write data. "
+                        "offset: ") + std::to_string(requests[i].get_offset())
+                    + std::string(", size: ") +
+                    std::to_string(requests[i].get_size()));
+
 		if (requests[i].get_offset() % MIN_BLOCK_SIZE > 0)
-			throw io_exception((boost::format(
-						"The IO request offset isn't aligned. offset: %1%, size: %2%")
-					% requests[i].get_offset() % requests[i].get_size()).str());
+			throw io_exception(std::string("The IO request offset isn't "
+                    "aligned. offset: ") +
+                    std::to_string(requests[i].get_offset()) +
+                    std::string(", size: ") +
+                    std::to_string(requests[i].get_size()));
 		if (requests[i].get_size() % MIN_BLOCK_SIZE > 0)
-			throw io_exception((boost::format(
-							"The IO request size isn't aligned. offset: %1%, size: %2%")
-						% requests[i].get_offset() % requests[i].get_size()).str());
+			throw io_exception(std::string("The IO request size isn't "
+                    "aligned. offset: ") +
+                    std::to_string(requests[i].get_offset()) +
+                    std::string(", size: ") +
+                    std::to_string(requests[i].get_size()));
+
+
 		if (requests[i].get_req_type() == io_request::USER_COMPUTE)
 			throw io_exception("user compute isn't supported");
 

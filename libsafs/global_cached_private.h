@@ -235,7 +235,7 @@ public:
 	void process_user_reqs(queue_interface<io_request> &queue);
 
 	void queue_requests(page_req_pair reqs[], int num) {
-		BOOST_VERIFY(pending_requests.add(reqs, num) == num);
+		assert(pending_requests.add(reqs, num) == num);
 		get_thread()->activate();
 	}
 

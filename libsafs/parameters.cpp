@@ -20,8 +20,6 @@
 #include<algorithm>
 #include <sstream>
 
-#include <boost/format.hpp>
-
 #include "log.h"
 #include "parameters.h"
 #include "common.h"
@@ -78,7 +76,7 @@ sys_parameters::sys_parameters()
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
 {
-	str2int_map cache_map(cache_types, 
+	str2int_map cache_map(cache_types,
 			sizeof(cache_types) / sizeof(cache_types[0]));
 	str2int_map RAID_option_map(RAID_options,
 			sizeof(RAID_options) / sizeof(RAID_options[0]));
@@ -156,8 +154,7 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	else
 		num_nodes = cpus.get_num_nodes();
 #endif
-	BOOST_LOG_TRIVIAL(info) << boost::format("SAFS runs on %1% NUMA nodes")
-		% num_nodes;
+	std::cout << "SAFS runs on " << num_nodes << "NUMA nodes\n";
 
 	it = configs.find("merge_reqs");
 	if (it != configs.end()) {
@@ -202,33 +199,33 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 
 void sys_parameters::print()
 {
-	BOOST_LOG_TRIVIAL(info) << "system parameters: ";
-	BOOST_LOG_TRIVIAL(info) << "\tRAID_block_size: " << RAID_block_size;
-	BOOST_LOG_TRIVIAL(info) << "\tSA_cell_size: " << SA_min_cell_size;
-	BOOST_LOG_TRIVIAL(info) << "\tio_depth:" << io_depth_per_file;
-	BOOST_LOG_TRIVIAL(info) << "\tcache_type: " << cache_type;
-	BOOST_LOG_TRIVIAL(info) << "\tcache_size: " << cache_size;
-	BOOST_LOG_TRIVIAL(info) << "\tRAID_mapping: " << RAID_mapping_option;
-	BOOST_LOG_TRIVIAL(info) << "\tvirt_aio: " << use_virt_aio;
-	BOOST_LOG_TRIVIAL(info) << "\tverify_content: " << verify_content;
-	BOOST_LOG_TRIVIAL(info) << "\tuse_flusher: " << use_flusher;
-	BOOST_LOG_TRIVIAL(info) << "\tcache_large_write: " << cache_large_write;
-	BOOST_LOG_TRIVIAL(info) << "\tvaio_print_freq: " << vaio_print_freq;
-	BOOST_LOG_TRIVIAL(info) << "\tnuma_num_process_threads: " << numa_num_process_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes: " << num_nodes;
-	BOOST_LOG_TRIVIAL(info) << "\tmerge_reqs: " << merge_reqs;
-	BOOST_LOG_TRIVIAL(info) << "\tmax_obj_alloc_size: " << max_obj_alloc_size;
-	BOOST_LOG_TRIVIAL(info) << "\twritable: " << writable;
-	BOOST_LOG_TRIVIAL(info) << "\tmax_num_pending_ios: " << max_num_pending_ios;
-	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
-	BOOST_LOG_TRIVIAL(info) << "\tbusy_wait: " << busy_wait;
-	BOOST_LOG_TRIVIAL(info) << "\tnum_io_threads: " << num_io_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tbind_io_thread: " << bind_io_thread;
+	std::cout << "system parameters: ";
+	std::cout << "\tRAID_block_size: " << RAID_block_size;
+	std::cout << "\tSA_cell_size: " << SA_min_cell_size;
+	std::cout << "\tio_depth:" << io_depth_per_file;
+	std::cout << "\tcache_type: " << cache_type;
+	std::cout << "\tcache_size: " << cache_size;
+	std::cout << "\tRAID_mapping: " << RAID_mapping_option;
+	std::cout << "\tvirt_aio: " << use_virt_aio;
+	std::cout << "\tverify_content: " << verify_content;
+	std::cout << "\tuse_flusher: " << use_flusher;
+	std::cout << "\tcache_large_write: " << cache_large_write;
+	std::cout << "\tvaio_print_freq: " << vaio_print_freq;
+	std::cout << "\tnuma_num_process_threads: " << numa_num_process_threads;
+	std::cout << "\tnum_nodes: " << num_nodes;
+	std::cout << "\tmerge_reqs: " << merge_reqs;
+	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size;
+	std::cout << "\twritable: " << writable;
+	std::cout << "\tmax_num_pending_ios: " << max_num_pending_ios;
+	std::cout << "\thuge_page_enabled: " << huge_page_enabled;
+	std::cout << "\tbusy_wait: " << busy_wait;
+	std::cout << "\tnum_io_threads: " << num_io_threads;
+	std::cout << "\tbind_io_thread: " << bind_io_thread;
 }
 
 void sys_parameters::print_help()
 {
-	str2int_map cache_map(cache_types, 
+	str2int_map cache_map(cache_types,
 			sizeof(cache_types) / sizeof(cache_types[0]));
 	str2int_map RAID_option_map(RAID_options,
 			sizeof(RAID_options) / sizeof(RAID_options[0]));

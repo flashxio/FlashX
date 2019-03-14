@@ -862,7 +862,7 @@ public:
 		T curr() const {
 			seq_const_iterator<T> *it = (seq_const_iterator<T> *) this;
 			// TODO I need to fix this.
-			BOOST_VERIFY(it->has_next());
+			assert(it->has_next());
 			return curr_page_it.curr();
 		}
 	};

@@ -18,8 +18,7 @@
  */
 
 #include <unordered_map>
-
-#include <boost/assert.hpp>
+#include <cassert>
 
 #include "cache_config.h"
 #include "associative_cache.h"
@@ -137,7 +136,7 @@ file_map_cache_config::file_map_cache_config(long size, int type,
 			tot_files += num_files;
 			long part_size = size * (((float) num_files)
 					/ mapper->get_num_files());
-			BOOST_VERIFY(node_exist(node_ids, new_node_id));
+			assert(node_exist(node_ids, new_node_id));
 			part_sizes.insert(std::pair<int, long>(new_node_id, part_size));
 			printf("file mapping: cache part %d: size: %ld\n",
 					new_node_id, part_size);

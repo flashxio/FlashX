@@ -50,7 +50,7 @@ static bool read_config_file(const std::string &conf_file,
 		size_t found = str.find("=");
 		/* if there isn't `=', I assume it's a file name*/
 		if (found == std::string::npos) {
-			BOOST_LOG_TRIVIAL(error) << std::string("wrong format: ") + line;
+            std::cerr << std::string("wrong format: ") << line << std::endl;
 			return false;
 		}
 

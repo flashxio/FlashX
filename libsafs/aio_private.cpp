@@ -17,9 +17,8 @@
  * limitations under the License.
  */
 
+#include <cassert>
 #include <limits.h>
-
-#include <boost/assert.hpp>
 
 #include "aio_private.h"
 #include "messaging.h"
@@ -195,7 +194,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
 		tcb->vec.resize(num_bufs);
-		BOOST_VERIFY(tcb->req.get_vec(tcb->vec.data(), num_bufs) == num_bufs);
+		assert(tcb->req.get_vec(tcb->vec.data(), num_bufs) == num_bufs);
 		struct iocb *req = ctx->make_iovec_request(io.get_fd(tcb->req.get_offset()),
 				/*
 				 * iocb only contains a pointer to the io vector.

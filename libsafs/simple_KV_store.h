@@ -74,7 +74,7 @@ public:
 		off_t end_off = (arr.get_offset() + arr.get_size()) / sizeof(ValueType);
 		for (int i = 0; i < num_tasks; i++) {
 			off_t idx = tasks[i].get_idx();
-			BOOST_VERIFY(idx >= start_off && idx < end_off);
+			assert(idx >= start_off && idx < end_off);
 			int num_entries = tasks[i].get_num_entries();
 			off_t it_start = (idx - start_off) * sizeof(ValueType);
 			off_t it_end = it_start + sizeof(ValueType) * num_entries;

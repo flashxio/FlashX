@@ -20,7 +20,6 @@
 #include <signal.h>
 #include <stdio.h>
 
-#include <boost/foreach.hpp>
 #include <system_error>
 
 #include "debugger.h"
@@ -64,8 +63,7 @@ debugger::debugger()
 
 debugger::~debugger()
 {
-	typedef std::map<int, debug_task *> task_map_t;
-	BOOST_FOREACH(task_map_t::value_type &p, tasks) {
+	for (auto& p : tasks) {
 		delete p.second;
 	}
 }

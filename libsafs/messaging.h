@@ -302,7 +302,7 @@ class msg_buffer: public fifo_queue<message<T> >
 			fifo_queue<message<T> >::expand_queue(
 					fifo_queue<message<T> >::get_size() * 2);
 		}
-		BOOST_VERIFY(fifo_queue<message<T> >::add(&msg, 1) == 1);
+		assert(fifo_queue<message<T> >::add(&msg, 1) == 1);
 	}
 
 public:
@@ -378,7 +378,7 @@ public:
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		BOOST_VERIFY(ret == thread_safe_FIFO_queue<message<T> >::add(
+		assert(ret == thread_safe_FIFO_queue<message<T> >::add(
 					msgs.data(), ret));
 		return num_objs;
 	}
