@@ -2,13 +2,20 @@
 
 int main() {
 
-    auto G = fg::CGraph("test-u.adj", "test-u.index",
-            "/home/disa/Research/graphyti/package/src/conf/run_graph.txt");
-        auto c = G.coreness();
+    auto G = fg::CGraph("test-d.adj", "test-d.index",
+            "/home/disa/Research/graphyti/graphyti/src/conf/run_graph.txt");
 
+        auto c = G.coreness();
         printf("The cores are: \n[ ");
         for (auto const& v : c) {
             printf("%lu ", v);
         }
-        printf("\n");
+        printf("]\n");
+
+        auto d = G.degree();
+        printf("The degree is: \n[ ");
+        for (auto const& v : c) {
+            printf("%lu ", v);
+        }
+        printf("]\n");
 }

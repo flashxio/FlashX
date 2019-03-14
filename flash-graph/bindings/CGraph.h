@@ -28,7 +28,6 @@ namespace fg {
 
 class CGraph {
     private:
-        bool isC;
         std::string graph_file;
         std::string index_file;
         config_map::ptr configs;
@@ -53,6 +52,20 @@ class CGraph {
             return graph->get_graph_header().get_num_vertices();
         }
 
+        const size_t ecount() const {
+            return graph->get_num_edges();
+        }
+
+        const bool is_directed() const {
+            return graph->is_directed();
+        }
+
+        const bool is_in_mem() const {
+            return graph->is_in_mem();
+        }
+        // End Utils
+
+        // Begin Algs
         // Coreness
         std::vector<size_t> coreness(const size_t kmax=0, const size_t kmin=0) {
             return compute_kcore(graph, kmin, kmax, true);
@@ -176,9 +189,13 @@ class CGraph {
             return bfs(graph, start_vertex, edge);
         }
 
+        // TODO: tocsr
+        // TODO: toigraph
+
         ~CGraph() {
             graph_engine::destroy_flash_graph();
         }
+        // End Algs
 };
 }
 #endif
