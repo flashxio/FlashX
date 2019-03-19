@@ -24,7 +24,6 @@
 
 #include <string>
 #include <unordered_map>
-#include <boost/format.hpp>
 
 #include "native_file.h"
 
@@ -120,7 +119,7 @@ public:
 		if (f == NULL)
 			perror("fopen");
 		else
-			BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
+			assert(fwrite(this, vertex_index::get_index_size(), 1, f));
 		fclose(f);
 	}
 };
@@ -168,12 +167,13 @@ public:
 		index.h.data.num_entries = vertices.size();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL)
-			BOOST_LOG_TRIVIAL(error) << boost::format("fail to open %1%: %2%")
-				% file % strerror(errno);
-		else {
-			BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
-			BOOST_VERIFY(fwrite(vertices.data(),
+		if (f == NULL) {
+			//fprintf(stderr, (std::string("fail to open") + file +
+                    //std::string(":") +
+                    //std::to_string(errno) + std::string("\n")).c_str());
+        } else {
+			assert(fwrite(&index, vertex_index::get_header_size(), 1, f));
+			assert(fwrite(vertices.data(),
 						vertices.size() * sizeof(vertices[0]), 1, f));
 		}
 		fclose(f);
@@ -344,12 +344,13 @@ public:
 		index.h.data.out_part_loc = vertices.front().get_out_off();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL)
-			BOOST_LOG_TRIVIAL(error) << boost::format("fail to open %1%: %2%")
-				% file % strerror(errno);
-		else {
-			BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
-			BOOST_VERIFY(fwrite(vertices.data(),
+		if (f == NULL) {
+            //std::string msg = std::string("fail to open ") + file +
+                    //std::string(":") + std::to_string(errno) + std::string("\n");
+			//fprintf(stderr, msg.c_str());
+        } else {
+			assert(fwrite(&index, vertex_index::get_header_size(), 1, f));
+			assert(fwrite(vertices.data(),
 						vertices.size() * sizeof(vertices[0]), 1, f));
 		}
 		fclose(f);

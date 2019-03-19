@@ -20,8 +20,6 @@
 #include <stdlib.h>
 #include <malloc.h>
 
-#include <boost/format.hpp>
-
 #include "log.h"
 #include "safs_file.h"
 #include "cache.h"
@@ -67,8 +65,7 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	graph->graph_size = numa_buf->get_length();
 	graph->graph_data = numa_buf;
 	graph->graph_file_name = file_name;
-	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
-		% graph->graph_size;
+    std::cout << "load a graph of " << graph->graph_size << " bytes\n";
 
 	safs::NUMA_buffer::cdata_info data = numa_buf->get_data(0, PAGE_SIZE);
 	assert(data.first);
@@ -88,8 +85,7 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	graph->graph_data = numa_buf;
 	graph->graph_file_name = file_name;
 
-	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
-		% graph->graph_size;
+    std::cout << "load a graph of " << graph->graph_size << " bytes\n";
 #if 0
 	graph->graph_file_id = io_factory->get_file_id();
 #endif

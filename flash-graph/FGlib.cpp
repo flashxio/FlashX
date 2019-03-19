@@ -427,7 +427,7 @@ std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg)
 	graph->get_vertex_programs(vprogs);
 	time_t start_time = std::numeric_limits<time_t>::max();
 	time_t end_time = std::numeric_limits<time_t>::min();
-	BOOST_FOREACH(vertex_program::ptr prog, vprogs) {
+	for (vertex_program::ptr prog : vprogs) {
 		start_time = std::min(start_time,
 				((time_range_vertex_program &)(*prog)).get_start_time());
 		end_time = std::max(end_time,

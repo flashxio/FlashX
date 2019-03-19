@@ -24,12 +24,9 @@ SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-UNITTEST = test-bitmap test-partitioner test-vertex_index
+UNITTEST = test-partitioner test-vertex_index
 
 all: $(UNITTEST)
-
-test-bitmap: test-bitmap.o ../libgraph.a
-	$(CXX) -o test-bitmap test-bitmap.o $(LDFLAGS)
 
 test-partitioner: test-partitioner.o ../libgraph.a
 	$(CXX) -o test-partitioner test-partitioner.o $(LDFLAGS)
@@ -38,7 +35,6 @@ test-vertex_index: test-vertex_index.o ../libgraph.a
 	$(CXX) -o test-vertex_index test-vertex_index.o $(LDFLAGS)
 
 test:
-	./test-bitmap
 	./test-partitioner
 	./test-vertex_index
 

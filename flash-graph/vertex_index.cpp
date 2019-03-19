@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-#include <boost/format.hpp>
-
 #include "log.h"
 #include "io_interface.h"
 #include "safs_file.h"
@@ -85,8 +83,8 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 {
 	native_file local_f(index_file);
 	if (!local_f.exist())
-		throw io_exception(boost::str(boost::format(
-						"the index file %1% doesn't exist") % index_file));
+		throw io_exception(std::string("the index file ") + index_file +
+                std::string(" doesn't exist"));
 	ssize_t size = local_f.get_size();
 	if (size <= 0 || (size_t) size < sizeof(vertex_index)) {
 		throw wrong_format("the index file is smaller than expected");
@@ -108,9 +106,8 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 		throw wrong_format("the index file is smaller than expected");
 	verify_index(idx);
 
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("load vertex index: file size: %1%, index size: %2%")
-		% size % idx->get_index_size();
+	printf("load vertex index: file size: %lu, index size: %lu\n",
+		size, idx->get_index_size());
 	return idx;
 }
 
@@ -121,8 +118,8 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 
 	safs_file safs_f(get_sys_RAID_conf(), index_file);
 	if (!safs_f.exist())
-		throw io_exception(boost::str(boost::format(
-						"the index file %1% doesn't exist") % index_file));
+		throw io_exception(std::string("the index file: ") +
+                index_file + std::string(" doesn't exist"));
 
 	// Right now only the cached I/O can support async I/O
 	file_io_factory::shared_ptr factory = create_io_factory(index_file,
@@ -150,8 +147,7 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	if (factory->get_file_size() < (ssize_t) index_size)
 		throw wrong_format("the index file is smaller than expected");
 	char *buf = NULL;
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("allocate %1% bytes for vertex index") % index_size;
+    printf("allocate %lu bytes for vertex index\n", index_size);
 	ret = posix_memalign((void **) &buf, PAGE_SIZE,
 			std::max(index_size, (size_t) INDEX_HEADER_SIZE));
 	if (ret != 0)
@@ -179,7 +175,7 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	// The data may only occupy part of the page.
 	if (aligned_index_size < index_size) {
 		char *tmp = NULL;
-		BOOST_VERIFY(posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE) == 0);
+		assert(posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE) == 0);
 		data_loc_t loc(factory->get_file_id(), aligned_index_size);
 		io_request req(tmp, loc, PAGE_SIZE, READ);
 		io->access(&req, 1);
@@ -276,7 +272,7 @@ compressed_undirected_vertex_entry::compressed_undirected_vertex_entry(
 
 void in_mem_cundirected_vertex_index::init(const undirected_vertex_index &index)
 {
-	BOOST_LOG_TRIVIAL(info) << "init from a regular vertex index";
+	printf("init from a regular vertex index\n");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
@@ -304,7 +300,7 @@ void in_mem_cundirected_vertex_index::init(const cundirected_vertex_index &index
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "init from a compressed vertex index";
+	printf("init from a compressed vertex index\n");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	num_vertices = index.get_graph_header().get_num_vertices();
@@ -317,12 +313,10 @@ void in_mem_cundirected_vertex_index::init(const cundirected_vertex_index &index
 		large_vmap.insert(l_vertex_array[i]);
 	}
 
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("There are %1% large vertices") % num_large_vertices;
+    printf("There are %lu large vertices\n", num_large_vertices);
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("init in-mem compressed index takes %1% seconds")
-		% time_diff(start, end);
+    printf("init in-mem compressed index takes %.5f seconds\n",
+            time_diff(start, end));
 }
 
 in_mem_cundirected_vertex_index::in_mem_cundirected_vertex_index(
@@ -424,13 +418,12 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 	for (size_t i = 0; i < num_large_out_vertices; i++) {
 		large_out_vmap.insert(l_out_vertex_array[i]);
 	}
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("There are %1% large in-vertices and %2% large out-vertices")
-		% num_large_in_vertices % num_large_out_vertices;
+    printf("There are %lu large in-vertices and %lu large out-vertices\n",
+            num_large_in_vertices, num_large_out_vertices);
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("init in-mem compressed index takes %1% seconds")
-		% time_diff(start, end);
+
+    printf("init in-mem compressed index takes %.5f seconds\n",
+            time_diff(start, end));
 }
 
 in_mem_cdirected_vertex_index::in_mem_cdirected_vertex_index(
@@ -471,15 +464,13 @@ void in_mem_cdirected_vertex_index::verify_against(
 		ext_mem_vertex_info in_info = index.get_vertex_info_in(id);
 		ext_mem_vertex_info out_info = index.get_vertex_info_out(id);
 		if (in_info.get_off() != it.get_curr_off()) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"in off: %1% != curr off: %2%") % in_info.get_off()
-				% it.get_curr_off();
+            fprintf(stderr, "in off: %lu != curr off: %lu\n",
+                    in_info.get_off(), it.get_curr_off());
 			return;
 		}
 		if (out_info.get_off() == it.get_curr_out_off()) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"out off: %1% != curr off: %2%") % out_info.get_off()
-				% it.get_curr_out_off();
+            fprintf(stderr, "in off: %lu != curr off: %lu\n",
+                   out_info.get_off(), it.get_curr_out_off());
 			return;
 		}
 		id++;

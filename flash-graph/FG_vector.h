@@ -53,7 +53,7 @@ class FG_vector
 	public:
 	typedef typename std::shared_ptr<FG_vector<T> > ptr; /** Smart pointer for object access */
 
-	/** 
+	/**
 	 * \brief  Create a vector of the length the same as the number of vertices
 	 *         in the graph. An object of this
 	 *         class should be created using this or the `create(size_t size)`
@@ -109,7 +109,7 @@ class FG_vector
 		eles.assign(num, val);
 	}
 
-	/** 
+	/**
 	 * \brief Make a shallow copy of the vector.
 	 * \param other An `FG_vector` smart pointer.
 	 * **paralel**
@@ -134,7 +134,7 @@ class FG_vector
 	 *   element.
 	 * \param other An `FG_vector` smart pointer.
 	 */
-	// TODO DM: Make parallel / smarter 
+	// TODO DM: Make parallel / smarter
 	bool eq_all(FG_vector<T>::ptr other) {
 		return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
 	}
@@ -161,7 +161,7 @@ class FG_vector
 		// TODO we need a parallel implementation.
 
 		assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
-		BOOST_FOREACH(T v, eles) {
+		for (T v : eles) {
 			set.insert(v);
 		}
 	}
@@ -186,7 +186,7 @@ class FG_vector
 	}
 
 	/**
-	 * \brief  Const method to get a pointer to the memory array 
+	 * \brief  Const method to get a pointer to the memory array
 	 *         used internally by the vector to store its owned elements.
 	 * \return A const pointer the underlying data memory array.
 	 *
@@ -212,12 +212,12 @@ class FG_vector
 	}
 
 	/**
-	 * \brief Compute the 
+	 * \brief Compute the
 	 *        [L2 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Euclidean_norm)
 	 *        (also know as Euclidean distance) of a vector. <br>
 	 * **parallel**
 	 *
-	 * \return An object of type `T` with the value of the L2 norm. 
+	 * \return An object of type `T` with the value of the L2 norm.
 	 */
 	T norm2() const {
 		T ret = 0;
@@ -227,8 +227,8 @@ class FG_vector
 	}
 
 	/**
-	 * \brief Compute the 
-	 * [L1 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Taxicab_norm_or_Manhattan_norm) 
+	 * \brief Compute the
+	 * [L1 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Taxicab_norm_or_Manhattan_norm)
 	 * (also Taxicab norm) of an FG_vector. <br>
 	 * **parallel**
 	 *
@@ -364,7 +364,7 @@ class FG_vector
 	/**
 	 * \brief In place division of vector by a single value.
 	 * \param v The value by which you want the array divided.
-	 * **parallel** 
+	 * **parallel**
 	 */
 	void div_by_in_place(T v) {
 #pragma omp parallel for
@@ -405,7 +405,7 @@ class FG_vector
 	/**
 	 * \brief In place subtraction of the vector by another vector.
 	 * \param vec The vector by which you want the array to be subtracted.
-	 * **parallel** 
+	 * **parallel**
 	 */
 	template<class T2>
 	void subtract_in_place(typename FG_vector<T2>::ptr &vec) {

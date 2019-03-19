@@ -21,9 +21,6 @@
  */
 
 #include <algorithm>
-#include <boost/foreach.hpp>
-#include <boost/format.hpp>
-
 #include "thread.h"
 
 #include "log.h"
@@ -79,7 +76,7 @@ class graph_index
 	graph_index &operator=(const graph_index &);
 public:
 	typedef std::shared_ptr<graph_index> ptr; /** Type used to access object*/
-    
+
 	graph_index() {
 	}
 
@@ -166,7 +163,7 @@ public:
 		if (vertex_arr)
 			free_large(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
 
-		BOOST_FOREACH(part_vertex_array arr, part_vertex_arrs)
+		for (part_vertex_array arr : part_vertex_arrs)
 			free_large(arr.second, sizeof(arr.second[0]) * arr.first);
 	}
 
@@ -182,7 +179,7 @@ public:
 		partitioner.get_all_vertices_in_part(this->part_id, tot_num_vertices,
 				local_ids);
 		assert(local_ids.size() == num_vertices);
-		BOOST_FOREACH(vertex_id_t vid, local_ids) {
+		for (vertex_id_t vid : local_ids) {
 			int part_id;
 			off_t part_off;
 			partitioner.map2loc(vid, part_id, part_off);
@@ -214,7 +211,7 @@ public:
 		for (size_t i = 0; i < ids.size(); i++) {
 			vertex_id_t id = ids[i];
 			// horizontal part id.
-			BOOST_VERIFY(this->part_id == partitioner.map(id));
+			assert(this->part_id == partitioner.map(id));
 			// vertical parts.
 			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
 				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
@@ -371,8 +368,7 @@ public:
 		min_vertex_id = 0;
 		max_vertex_id = header.get_num_vertices() - 1;
 
-		BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% vertices")
-			% header.get_num_vertices();
+		printf("There are %ld vertices\n", header.get_num_vertices());
 	}
 
 	virtual void init_vparts(int hpart_id, int num_vparts,
@@ -464,7 +460,7 @@ public:
 			if (id != INVALID_VERTEX_ID)
 				return id;
 		}
-		BOOST_LOG_TRIVIAL(error) << "can't find vertex ID";
+		fprintf(stderr, "can't find vertex ID\n");
 		return INVALID_VERTEX_ID;
 	}
 
@@ -500,7 +496,7 @@ class graph_index_impl: public graph_index
 	// This contains the vertices with edges.
 	std::vector<vertex_type> vertices;
 	size_t min_vertex_size;
-	
+
 	graph_index_impl(const std::string &index_file) {
 		vertex_index *index = load_vertex_index(index_file);
 		this->min_vertex_size = get_min_ext_mem_vertex_size(

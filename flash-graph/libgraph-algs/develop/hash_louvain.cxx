@@ -114,11 +114,11 @@ static void set_changed(bool changed) {
 static void print_cluster_map(cluster_map& cl_map) {
 
 	if (cl_map.size() == 0) {
-		BOOST_LOG_TRIVIAL(info) << "EMPTY";
+		printf("EMPTY\n");
 		return;
 	}
 	for (cluster_map::iterator it = cl_map.begin(); it != cl_map.end(); ++it) {
-		BOOST_LOG_TRIVIAL(info) << "Cluster: " << it->first << ", " << it->second;
+        std::cout << "Cluster: " << it->first << ", " << it->second << std::endl;
 	}
 }
 
@@ -130,8 +130,8 @@ static void print_cluster_map_sum(cluster_map& cl_map) {
 		weight_sum += it->second.get_weight();
 		vol_sum += it->second.get_volume();
 	}
-	BOOST_LOG_TRIVIAL(info) << "Cluster map weight sum: " << weight_sum;
-	BOOST_LOG_TRIVIAL(info) << "Cluster map volume sum: " << vol_sum;
+    std::cout << "Cluster map weight sum: " << weight_sum << std::endl;
+	std::cout << "Cluster map volume sum: " << vol_sum << std::endl;
 }
 
 class louvain_vertex: public compute_vertex
@@ -198,10 +198,10 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 	void update(cluster_id_t id, float vol, uint32_t weight) {
 
 #if 0
-		BOOST_LOG_TRIVIAL(info) << "Cluster before update:";
+		std::cout << "Cluster before update:" << std::endl;
 		print_cluster_map(th_local_cluster_map);
-		BOOST_LOG_TRIVIAL(info) << "Adding c" << id << ", vol=" << vol << ", wgt=" << weight;
-		printf("\n");
+		std::cout << "Adding c" << id << ", vol=" << vol
+            << ", wgt=" << weight << std::endl;
 #endif
 
 		cluster_map::iterator it = th_local_cluster_map.find(id);
@@ -214,7 +214,7 @@ class louvain_vertex_program: public vertex_program_impl<louvain_vertex>
 		}
 
 #if 0
-		BOOST_LOG_TRIVIAL(info) << "Cluster after update:";
+		std::cout << "Cluster after update:" << std::endl;
 		print_cluster_map(th_local_cluster_map);
 		printf("\n");
 #endif
@@ -309,8 +309,9 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 
 #if 0
 	/** DEBUG **/
-	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id <<
-		" ==> " << curr_cluster << "processing neigh in cluster: " << neigh_cluster;
+	std::cout << "v" << my_id << " in c" << cluster_id <<
+		" ==> " << curr_cluster << "processing neigh in cluster: "
+        << neigh_cluster << std::endl;
 	/** GUBED **/
 #endif
 
@@ -323,7 +324,7 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 	if (delta_mod > this->max_modularity) {
 #if 0
 		/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " moved from c" <<  cluster_id << " to c"
+		std::cout << "v" << my_id << " moved from c" <<  cluster_id << " to c"
 		   << neigh_cluster_id << ", delta_mod = "<< delta_mod << "\n";
 		/** GUBED **/
 #endif
@@ -363,8 +364,6 @@ void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it,
 
 //  Does not require edgelist
 void louvain_vertex::compute_per_cluster_vol_weight(vertex_program &prog) {
-	//BOOST_LOG_TRIVIAL(info) << "v"<< prog.get_vertex_id(*this) << ", " << "c" << cluster_id
-		//<< " += vol: " << volume << ", += wgt: " << weight;
 	((louvain_vertex_program&)prog).update(this->cluster_id, this->volume, this->weight);
 }
 
@@ -414,7 +413,7 @@ void build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 	std::vector<vertex_program::ptr> ec_progs;
 	graph->get_vertex_programs(ec_progs);
-	BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+	for (vertex_program::ptr vprog : ec_progs) {
 		louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
 
 		if (accum_edges) { g_edge_weight += lvp->get_local_ec(); }
@@ -440,7 +439,7 @@ void par_build_global_cluster_map (graph_engine::ptr graph, bool accum_edges) {
 
 #if 1
 	if (accum_edges) {
-		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+		for (vertex_program::ptr vprog : ec_progs) {
 			louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
 			g_edge_weight += lvp->get_local_ec();
 		}
@@ -491,8 +490,10 @@ namespace fg
 				fg->get_graph_header());
 		graph_engine::ptr graph = fg->create_engine(index);
 
-		BOOST_LOG_TRIVIAL(info) << "Starting Louvain with " << levels << " levels";
-		BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file().c_str();
+		std::cout << "Starting Louvain with " <<
+            levels << " levels" << std::endl;
+		std::cout << "prof_file: " << graph_conf.get_prof_file().c_str()
+             << std::endl;
 #ifdef PROFILER
 		if (!graph_conf.get_prof_file().empty())
 			ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -501,45 +502,43 @@ namespace fg
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 
-		/*~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute Vol & Weight ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		/*~~~~~~~~~~~~~~~~~~~~~~~ Compute Vol & Weight ~~~~~~~~~~~~~~~~~~~~~~~*/
 		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new louvain_vertex_program_creater()));
 		graph->wait4complete();
 
 		build_global_cluster_map(graph, true);
 
-		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
+		std::cout << "The graph's total edge weight is " << g_edge_weight << "\n";
 #if 0
 		/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
-		BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
+		std::cout << "\x1B[31m=======================================\x1B[0m\n";
+		std::cout << "Global cluster map: ";
 		print_cluster_map(g_cluster_map);
-		BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+		std::cout << "\x1B[31m=======================================\x1B[0m\n";
 		/** GUBED **/
 #endif
 		int iter = 0;
 
 		do {
-		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		/*~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++
-												<< " ********************************\x1B[0m\n\n";
+			std::cout << "\n\n\x1B[31m****************** LEVEL ITERATION: " <<
+                iter++ << " ********************************\x1B[0m\n\n";
 
 #if 1
 			/** DEBUG **/
             std::vector<cluster_id_t> ret (graph->get_num_vertices());
 			graph->query_on_all(vertex_query::ptr(
                         new save_query<cluster_id_t, louvain_vertex>(ret)));
-			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
+			std::cout << "Printing vertex clusters:" << std::endl;
 #endif
 #if 1
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
-			BOOST_LOG_TRIVIAL(info) << "Global cluster map: ";
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
+			std::cout << "Global cluster map: ";
 			print_cluster_map(g_cluster_map);
 			print_cluster_map_sum(g_cluster_map);
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
-
-			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); }
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
 			/** GUBED **/
 #endif
 
@@ -563,22 +562,19 @@ namespace fg
         std::vector<cluster_id_t> ret(graph->get_num_vertices());
 		graph->query_on_all(vertex_query::ptr(
                     new save_query<cluster_id_t, louvain_vertex>(ret)));
-		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
+		std::cout << "\nVertex clusters @ end of Level1:" << std::endl;
 		/** GUBED **/
 #endif
 
 		louvain_stage = REBUILD; // TODO: Do something here
-		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n";
+		std::cout << "\n Reached rebuild graph stage\n";
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER
 		if (!graph_conf.get_prof_file().empty())
 			ProfilerStop();
 #endif
-
-		BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
-			% time_diff(start, end);
-
+		printf("It takes %.5f seconds\n", time_diff(start, end));
 		return;
 	}
 }

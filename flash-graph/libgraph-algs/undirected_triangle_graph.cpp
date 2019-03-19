@@ -92,8 +92,7 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		BOOST_LOG_TRIVIAL(debug)
-			<< boost::format("%1% working vertices") % ret;
+		printf("%ld working vertices\n", ret);
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
@@ -101,8 +100,7 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+            printf("%ld completed vertices\n", ret);
 		return;
 	}
 
@@ -116,7 +114,7 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 	std::vector<vertex_id_t> edges(vertex.get_num_edges(edge_type::IN_EDGE));
 	vertex.read_edges(edge_type::IN_EDGE, edges.data(), edges.size());
 	vertex_id_t id = prog.get_vertex_id(*this);
-	BOOST_FOREACH(vertex_id_t neigh_id, edges) {
+	for (vertex_id_t neigh_id : edges) {
 		vsize_t num_edges_neigh = prog.get_num_edges(neigh_id);
 		if ((num_edges_neigh < data->degree && neigh_id != id)
 				|| (num_edges_neigh == data->degree
@@ -129,8 +127,7 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 	if (data->edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+			printf("%ld completed vertices\n", ret);
 		destroy_runtime();
 		return;
 	}
@@ -160,8 +157,7 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	if (data->num_joined == data->num_required) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+            printf("%ld completed vertices\n", ret);
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
@@ -280,17 +276,17 @@ std::vector<size_t> compute_undirected_triangles(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm counts triangles in an undirected graph";
+		fprintf(stderr,
+                "This algorithm counts triangles in an undirected graph");
         return std::vector<size_t>();
 	}
 
-	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
+	printf("undirected triangle counting starts\n");
 	graph_index::ptr index = NUMA_graph_index<undirected_triangle_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -306,9 +302,8 @@ std::vector<size_t> compute_undirected_triangles(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds to count all triangles")
-		% time_diff(start, end);
+    printf("It takes %.5f seconds to count all triangles\n",
+            time_diff(start, end));
 
     std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(

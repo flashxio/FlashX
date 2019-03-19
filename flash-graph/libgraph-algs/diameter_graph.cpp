@@ -334,7 +334,7 @@ std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
 	std::vector<vertex_program::ptr> vprogs;
 	graph->get_vertex_programs(vprogs);
 	std::vector<vertex_dist_t> max_dist_vertices;
-	BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+	for (vertex_program::ptr vprog : vprogs) {
 		typename diameter_vertex_program<vertex_type>::ptr diameter_vprog
 			= diameter_vertex_program<vertex_type>::cast2(vprog);
 		diameter_vprog->get_max_dist_vertices(max_dist_vertices);
@@ -350,8 +350,8 @@ namespace fg
 size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 {
 	if (!fg->get_graph_header().is_directed_graph()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "we can't estimate diameter on an undirected graph currently";
+	    fprintf(stderr,
+			"We can't estimate diameter on an undirected graph currently\n");
 		return 0;
 	}
 	num_bfs = num_para_bfs;
@@ -369,11 +369,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 				fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("#para BFS: %1%, directed: %2%")
-		% num_para_bfs % directed;
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	std::cout << "diameter estimation starts";
+	std::cout << "#para BFS: " << num_para_bfs << ", directed: "
+        << directed << std::endl;
+	std::cout << "prof_file: " << graph_conf.get_prof_file() << std::endl;
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -389,11 +388,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 
 	short global_max = 0;
 	for (int i = 0; ; i++) {
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("Sweep %1% starts on %2% vertices, traverse edge: %3%")
-			% i % start_vertices.size() % traverse_edge;
-		BOOST_FOREACH(vertex_id_t v, start_vertices) {
-			BOOST_LOG_TRIVIAL(info) << "v" << v;
+		printf("Sweep %d starts on %lu vertices, traverse edge: %d\n",
+			i, start_vertices.size(), traverse_edge);
+		for (vertex_id_t& v : start_vertices) {
+			std::cout << "v" << v;
 		}
 
 		std::vector<vertex_dist_t> max_dist_vertices;
@@ -426,9 +424,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 			start_vertices.insert(start_vertices.begin(), start_set.begin(),
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
-			BOOST_LOG_TRIVIAL(info)
-				<< boost::format("The current max dist: %1%, global max: %2%")
-				% max_dist % global_max;
+			printf("The current max dist: %d, global max: %d\n",
+				max_dist, global_max);
 
 			if (max_dist == 0) {
 				size_t num_bfs = start_vertices.size();
@@ -451,8 +448,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 		}
 	}
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds in total")
-		% time_diff(start, end);
+	printf("It takes %.5f seconds in total\n", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

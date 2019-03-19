@@ -317,8 +317,7 @@ void directed_triangle_vertex::run_on_vertex_header(vertex_program &prog,
 	if (data->collect_all_headers() && data->is_complete()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+		    printf("%lu completed vertices\n", ret);
 		destroy_runtime();
 	}
 }
@@ -330,8 +329,7 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		BOOST_LOG_TRIVIAL(debug)
-			<< boost::format("%1% working vertices") % ret;
+        printf("%lu working vertices\n", ret);
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
@@ -339,8 +337,7 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+		    printf("%lu completed vertices\n", ret);
 		return;
 	}
 
@@ -373,8 +370,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	if (data->is_complete()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			BOOST_LOG_TRIVIAL(debug)
-				<< boost::format("%1% completed vertices") % ret;
+		    printf("%lu completed vertices\n", ret);
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
@@ -398,8 +394,8 @@ std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm counts triangles in a directed graph";
+        std::cerr <<
+            "This algorithm counts triangles in a directed graph\n";
         return std::vector<size_t>();
 	}
 
@@ -407,8 +403,8 @@ std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	BOOST_LOG_TRIVIAL(info) << "triangle counting starts";
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("triangle counting starts\n");
+    printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -424,9 +420,8 @@ std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds to count all triangles")
-		% time_diff(start, end);
+    printf("It takes %.5f seconds to count all triangles\n",
+            time_diff(start, end));
 
     std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(

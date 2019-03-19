@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <functional>
 
 #include "graphlab/cuckoo_set_pow2.hpp"
 #include "graph_engine.h"
@@ -179,7 +180,7 @@ public:
 
 	class index_hash
 	{
-		boost::hash<fg::vertex_id_t> id_hash;
+		std::hash<fg::vertex_id_t> id_hash;
 	public:
 		size_t operator()(const index_entry &e) const {
 			return id_hash(e.get_id());
@@ -232,7 +233,7 @@ public:
 		bool operator==(const id_iterator &it) const {
 			return it.it == this->it;
 		}
-		
+
 		bool operator!=(const id_iterator &it) const {
 			return it.it != this->it;
 		}

@@ -351,12 +351,6 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	else
 		fprintf(stderr, "a wrong time unit: %s\n", time_unit_str.c_str());
 
-#if 0
-	namespace bt = boost::posix_time;
-	printf("start time: %s\n", start_time_str.c_str());
-	bt::ptime pt = bt::time_from_string(start_time_str);
-	struct tm tm = bt::to_tm(pt);
-#endif
 	if (compute_all) {
 		std::pair<time_t, time_t> range = get_time_range(graph);
 		std::string start_time_str = ctime(&range.first);
@@ -436,12 +430,6 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 	else
 		fprintf(stderr, "a wrong time unit: %s\n", time_unit_str.c_str());
 
-#if 0
-	namespace bt = boost::posix_time;
-	printf("start time: %s\n", start_time_str.c_str());
-	bt::ptime pt = bt::time_from_string(start_time_str);
-	struct tm tm = bt::to_tm(pt);
-#endif
 	time_t start_time = conv_str_to_time(start_time_str);
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
 	auto comp_ids = compute_ts_wcc(graph, start_time,

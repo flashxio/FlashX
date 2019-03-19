@@ -19,8 +19,6 @@
 
 #include <math.h>
 
-#include <boost/format.hpp>
-
 #include "thread.h"
 #include "common.h"
 
@@ -51,20 +49,21 @@ void graph_config::print_help()
 
 void graph_config::print()
 {
-	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in graph algorithm.";
-	BOOST_LOG_TRIVIAL(info) << "\tthreads: " << num_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tprof_file: " << prof_file;
-	BOOST_LOG_TRIVIAL(info) << "\ttrace_file: " << trace_file;
-	BOOST_LOG_TRIVIAL(info) << "\tmax_processing_vertices: " << max_processing_vertices;
-	BOOST_LOG_TRIVIAL(info) << "\tenable_elevator: " << enable_elevator;
-	BOOST_LOG_TRIVIAL(info) << "\tpart_range_size_log: " << part_range_size_log;
-	BOOST_LOG_TRIVIAL(info) << "\tpreload: " << _preload;
-	BOOST_LOG_TRIVIAL(info) << "\tindex_file_weight: " << index_file_weight;
-	BOOST_LOG_TRIVIAL(info) << "\tin_mem_graph: " << _in_mem_graph;
-	BOOST_LOG_TRIVIAL(info) << "\tnum_vparts: " << num_vparts;
-	BOOST_LOG_TRIVIAL(info) << "\tmin_vpart_degree: " << min_vpart_degree;
-	BOOST_LOG_TRIVIAL(info) << "\tserial_run: " << serial_run;
-	BOOST_LOG_TRIVIAL(info) << "\tvertex_merge_gap: " << vertex_merge_gap;
+	std::cout << "Configuration parameters in graph algorithm.\n";
+	std::cout << "\tthreads: " << num_threads << std::endl;
+	std::cout << "\tprof_file: " << prof_file << std::endl;
+	std::cout << "\ttrace_file: " << trace_file << std::endl;
+	std::cout << "\tmax_processing_vertices: " <<
+        max_processing_vertices << std::endl;
+	std::cout << "\tenable_elevator: " << enable_elevator << std::endl;
+	std::cout << "\tpart_range_size_log: " << part_range_size_log << std::endl;
+	std::cout << "\tpreload: " << _preload << std::endl;
+	std::cout << "\tindex_file_weight: " << index_file_weight << std::endl;
+	std::cout << "\tin_mem_graph: " << _in_mem_graph << std::endl;
+	std::cout << "\tnum_vparts: " << num_vparts << std::endl;
+	std::cout << "\tmin_vpart_degree: " << min_vpart_degree << std::endl;
+	std::cout << "\tserial_run: " << serial_run << std::endl;
+	std::cout << "\tvertex_merge_gap: " << vertex_merge_gap << std::endl;
 }
 
 void graph_config::init(config_map::ptr map)
@@ -77,9 +76,8 @@ void graph_config::init(config_map::ptr map)
 		num_threads = 1 << (int) ceil(log2(num_threads));
 	}
 #endif
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"FlashGraph runs on %1% threads and %2% nodes")
-		% num_threads % safs::params.get_num_nodes();
+	std::cout << "FlashGraph runs on " << num_threads << " threads and " <<
+        safs::params.get_num_nodes() <<" nodes\n";
 	if (!power2(num_threads))
 		throw conf_exception("The number of worker threads has to be 2^n");
 	map->read_option("prof_file", prof_file);

@@ -236,9 +236,8 @@ public:
 	void finding_triangles_end(vertex_program &prog, size_t local_scan) {
 		vertex_id_t id = prog.get_vertex_id(*this);
 		if (max_scan.update(local_scan)) {
-			BOOST_LOG_TRIVIAL(info)
-				<< boost::format("new max scan: %1% at v%2%")
-				% local_scan % id;
+            std::cout << "new max scan: " << local_scan << " at v" << id
+                << std::endl;
 		}
 		known_scans.add(id, local_scan);
 	}
@@ -662,8 +661,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm current works on a directed graph";
+	    fprintf(stderr,
+			"This algorithm current works on a directed graph\n");
 		return FG_vector<std::pair<vertex_id_t, size_t> >::ptr();
 	}
 
@@ -676,8 +675,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	max_scan.reset();
 	known_scans.clear();
 
-	BOOST_LOG_TRIVIAL(info) << "scan statistics starts";
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("scan statistics starts\n");
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -708,16 +707,12 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	size_t min_edges = 1;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("Computing local scan on at least %1% vertices")
-		% topK;
+		printf("Computing local scan on at least %lu vertices\n", topK);
 	while (known_scans.get_size() < topK) {
 		graph->start(filter);
 		graph->wait4complete();
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("There are %1% computed vertices")
-			% known_scans.get_size();
-		BOOST_LOG_TRIVIAL(info) << "global max scan: " << max_scan.get();
+		printf("There are %lu computed vertices\n", known_scans.get_size());
+		printf("global max scan: %lu\n", max_scan.get());
 		max_scan = global_max(0);
 	}
 
@@ -748,9 +743,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 			prev_start_loc++;
 		}
 		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("prev topK scan: %1%, prev loc: %2%")
-			% prev_topK_scan % prev_start_loc;
+        std::cout << "prev topK scan: " << prev_topK_scan
+            << ", prev loc: " << prev_start_loc << std::endl;
 
 		// Let's use the topK as the max scan for unknown vertices
 		// and see if we can find a new vertex that has larger local scan.
@@ -758,9 +752,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		graph->start(std::shared_ptr<vertex_filter>(
 					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("There are %1% computed vertices")
-			% known_scans.get_size();
+        printf("There are %lu computed vertices\n", known_scans.get_size());
 
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
@@ -781,9 +773,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 			curr_start_loc++;
 		}
 		assert(known_scans.get(curr_start_loc).second == curr_topK_scan);
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("global max scan: %1%, topK scan: %2%, start loc: %3%")
-			% max_scan.get() % curr_topK_scan % curr_start_loc;
+		printf("global max scan: %lu, topK scan: %lu, start loc: %lu\n",
+                max_scan.get(), curr_topK_scan, curr_start_loc);
 	} while (prev_topK_scan != curr_topK_scan || prev_start_loc != curr_start_loc);
 	assert(known_scans.get_size() >= topK);
 
@@ -792,9 +783,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		ProfilerStop();
 #endif
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds for top %2%")
-		% time_diff(graph_start, end) % topK;
+    printf("It takes %.5f seconds for top %lu\n",
+            time_diff(graph_start, end), topK);
 
 	FG_vector<std::pair<vertex_id_t, size_t> >::ptr vec
 		= FG_vector<std::pair<vertex_id_t, size_t> >::create(topK);

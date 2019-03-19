@@ -351,8 +351,7 @@ std::vector<size_t> compute_local_scan(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm current works on a directed graph";
+	    fprintf(stderr, "This algorithm current works on a directed graph\n");
         return std::vector<size_t>();
 	}
 
@@ -360,8 +359,8 @@ std::vector<size_t> compute_local_scan(FG_graph::ptr fg)
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	BOOST_LOG_TRIVIAL(info) << "local scan starts";
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("local scan starts\n");
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -382,9 +381,8 @@ std::vector<size_t> compute_local_scan(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds to compute all local scan")
-		% time_diff(start, end);
+	printf("It takes %.5f seconds to compute all local scan\n",
+            time_diff(start, end));
 
     std::vector<size_t> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(

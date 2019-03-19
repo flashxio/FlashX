@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <atomic>
 
-#include <boost/foreach.hpp>
 #if defined(_OPENMP)
 #include <parallel/algorithm>
 #endif
@@ -58,20 +57,19 @@ static size_t buf_cap = 128 * 1024 * 1024;
 void set_num_threads(size_t num)
 {
     num_threads = num;
-    BOOST_LOG_TRIVIAL(info) << boost::format("# threads: %1%") % num_threads;
+    printf("# threads: %d\n", num_threads);
 }
 
 void set_sort_buf_size(size_t size)
 {
     sort_buf_size = size;
-    BOOST_LOG_TRIVIAL(info) << boost::format("sort buf size: %1%") % sort_buf_size;
+    printf("sort buf size: %lu\n", sort_buf_size);
 }
 
 void set_write_buf_size(size_t size)
 {
     write_subgraphs_size = size;
-    BOOST_LOG_TRIVIAL(info) << boost::format(
-            "write buf size: %1%") % write_subgraphs_size;
+    printf("write buf size: %lu\n", write_subgraphs_size);
 }
 
 class format_error: public std::exception
@@ -456,7 +454,7 @@ public:
 			g.get_edge_data_size(), creator) {
 		tmp_in_graph_file = basename(tempnam(".", "in-directed"));
 		in_f = creator->create_writer(tmp_in_graph_file);
-		BOOST_VERIFY(in_f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
+		assert(in_f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
 		tmp_out_graph_file = basename(tempnam(".", "out-directed"));
 		out_f = creator->create_writer(tmp_out_graph_file);
 	}
@@ -489,12 +487,12 @@ public:
 		int size = v.get_serialize_size(IN_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
-		BOOST_VERIFY(fwrite(buf.data(), size, 1, in_f) == 1);
+		assert(fwrite(buf.data(), size, 1, in_f) == 1);
 
 		size = v.get_serialize_size(OUT_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, OUT_EDGE);
-		BOOST_VERIFY(fwrite(buf.data(), size, 1, out_f) == 1);
+		assert(fwrite(buf.data(), size, 1, out_f) == 1);
 #endif
 	}
 
@@ -502,9 +500,9 @@ public:
 		const directed_serial_subgraph &d_subg = (const directed_serial_subgraph &) subg;
 		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
 			serial_graph::add_vertex(d_subg.get_vertex_info(i));
-		BOOST_VERIFY(in_f->write(d_subg.get_in_buf(), d_subg.get_in_size())
+		assert(in_f->write(d_subg.get_in_buf(), d_subg.get_in_size())
 				== (ssize_t) d_subg.get_in_size());
-		BOOST_VERIFY(out_f->write(d_subg.get_out_buf(), d_subg.get_out_size())
+		assert(out_f->write(d_subg.get_out_buf(), d_subg.get_out_size())
 				== (ssize_t) d_subg.get_out_size());
 	}
 
@@ -515,9 +513,9 @@ public:
 		size_t read_size = std::min(remain_size, BUF_SIZE);
 		while (read_size > 0) {
 			size_t ret = reader->read(buf.get(), read_size);
-			BOOST_VERIFY(ret == read_size);
+			assert(ret == read_size);
 			ret = to->write(buf.get(), read_size);
-			BOOST_VERIFY(ret == read_size);
+			assert(ret == read_size);
 			remain_size -= read_size;
 			read_size = std::min(remain_size, BUF_SIZE);
 		}
@@ -538,8 +536,8 @@ public:
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(), this->get_edge_data_size());
-		BOOST_VERIFY(in_f->seek(0, SEEK_SET) == 0);
-		BOOST_VERIFY(in_f->write((char *) &header, sizeof(header)) == sizeof(header));
+		assert(in_f->seek(0, SEEK_SET) == 0);
+		assert(in_f->write((char *) &header, sizeof(header)) == sizeof(header));
 		in_f = NULL;
 	}
 
@@ -571,7 +569,7 @@ public:
 			g.get_edge_data_size(), creator) {
 		tmp_graph_file = basename(tempnam(".", "undirected"));
 		f = creator->create_writer(tmp_graph_file);
-		BOOST_VERIFY(f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
+		assert(f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
 	}
 
 	~disk_undirected_graph() {
@@ -600,7 +598,7 @@ public:
 		int size = v.get_serialize_size(IN_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
-		BOOST_VERIFY(fwrite(buf.data(), size, 1, f) == 1);
+		assert(fwrite(buf.data(), size, 1, f) == 1);
 #endif
 	}
 
@@ -608,8 +606,8 @@ public:
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(), this->get_edge_data_size());
-		BOOST_VERIFY(f->seek(0, SEEK_SET) == 0);
-		BOOST_VERIFY(f->write((char *) &header, sizeof(header)) == sizeof(header));
+		assert(f->seek(0, SEEK_SET) == 0);
+		assert(f->write((char *) &header, sizeof(header)) == sizeof(header));
 		f = NULL;
 	}
 
@@ -1067,10 +1065,10 @@ public:
 			out_edge_list = typename edge_vector<edge_data_type>::ptr(
 					new stxxl_edge_vector<edge_data_type>());
 #else
-			BOOST_LOG_TRIVIAL(error)
-				<< "It doesn't support using disks to store intermediate results";
-			BOOST_LOG_TRIVIAL(error)
-				<< "stxxl is required to store intermediate results on disks";
+			fprintf(stderr, "It doesn't support using disks to store "
+                    "intermediate results\n");
+			fprintf(stderr,
+				"stxxl is required to store intermediate results on disks\n");
 			exit(1);
 #endif
 		}
@@ -1113,10 +1111,10 @@ public:
 			edge_list = typename edge_vector<edge_data_type>::ptr(
 					new stxxl_edge_vector<edge_data_type>());
 #else
-			BOOST_LOG_TRIVIAL(error)
-				<< "It doesn't support using disks to store intermediate results";
-			BOOST_LOG_TRIVIAL(error)
-				<< "stxxl is required to store intermediate results on disks";
+		    fprintf(stderr, "It doesn't support using disks to "
+                    "store intermediate results\n");
+		    fprintf(stderr, "stxxl is required to store intermediate"
+                    "results on disks\n");
 			exit(1);
 #endif
 		}
@@ -1127,7 +1125,7 @@ public:
 
 		// For an undirected graph, we need to store each edge twice
 		// and each copy is the reverse of the original edge.
-		BOOST_FOREACH(edge<edge_data_type> e, vec) {
+		for (edge<edge_data_type> e: vec) {
 			e.reverse_dir();
 			edge_list->push_back(e);
 		}
@@ -1188,7 +1186,7 @@ public:
 	undirected_edge_graph(
 			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
 			size_t edge_data_size): edge_graph(edge_data_size) {
-		BOOST_FOREACH(auto el, edge_lists) {
+		for (auto el : edge_lists) {
 			this->edge_lists.push_back(
 					((undirected_el_container<edge_data_type> &) *el).get_edges());
 		}
@@ -1256,7 +1254,7 @@ public:
 	directed_edge_graph(
 			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
 			size_t edge_data_size): edge_graph(edge_data_size) {
-		BOOST_FOREACH(auto el, edge_lists) {
+		for (auto el : edge_lists) {
 			this->in_edge_lists.push_back(
 					((directed_el_container<edge_data_type> &) *el).get_in_edges());
 			this->out_edge_lists.push_back(
@@ -1354,8 +1352,8 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 			assert(it != edges.cend());
 			edge<edge_data_type> e = *it;
-			BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
-			BOOST_VERIFY(v->get_id() == e.get_from());
+			assert(v->get_neighbor(j) == e.get_to());
+			assert(v->get_id() == e.get_from());
 			if (v->has_edge_data())
 				assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 		}
@@ -1397,8 +1395,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				BOOST_VERIFY(v->get_neighbor(j) == e.get_from());
-				BOOST_VERIFY(v->get_id() == e.get_to());
+				assert(v->get_neighbor(j) == e.get_from());
+				assert(v->get_id() == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1409,8 +1407,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				BOOST_VERIFY(v->get_id() == e.get_from());
-				BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
+				assert(v->get_id() == e.get_from());
+				assert(v->get_neighbor(j) == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1434,9 +1432,9 @@ std::unique_ptr<char[]> read_vertices(large_reader::ptr reader,
 	size_t size = cal_vertex_size(infos);
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[size]);
 	off_t off_begin = infos.front().get_off();
-	BOOST_VERIFY(reader->seek(off_begin, SEEK_SET) == off_begin);
-	BOOST_VERIFY(reader->read(buf.get(), size) == (ssize_t) size);
-	BOOST_FOREACH(ext_mem_vertex_info info, infos) {
+	assert(reader->seek(off_begin, SEEK_SET) == off_begin);
+	assert(reader->read(buf.get(), size) == (ssize_t) size);
+	for (ext_mem_vertex_info info : infos) {
 		off_t rel_off = info.get_off() - off_begin;
 		vertices.push_back((ext_mem_undirected_vertex *) (buf.get() + rel_off));
 	}
@@ -1483,7 +1481,7 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 		const std::string &index_file, large_reader::ptr adj_reader) const
 {
-	BOOST_LOG_TRIVIAL(info) << "check the graph in the external memory";
+	printf("check the graph in the external memory\n");
 	vertex_index::ptr idx;
 	// TODO is there a better option?
 	if (adj_reader->is_safs())
@@ -1533,8 +1531,7 @@ void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 
 	size_t num_vertices = check_all_vertices(reader, idx,
 			get_undirected_info_func(), edge_g, true);
-	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
-		% num_vertices;
+	printf("%lu vertices are checked\n", num_vertices);
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
@@ -1548,14 +1545,13 @@ void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 	};
 	size_t num_vertices = check_all_vertices(reader, idx,
 			get_undirected_info_func(), edge_g, true);
-	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
-		% num_vertices;
+	printf("%lu vertices are checked\n", num_vertices);
 }
 
 void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 		const std::string &index_file, large_reader::ptr adj_reader) const
 {
-	BOOST_LOG_TRIVIAL(info) << "check the graph in the external memory";
+	printf("check the graph in the external memory\n");
 	vertex_index::ptr idx;
 	// TODO is there a better option?
 	if (adj_reader->is_safs())
@@ -1635,9 +1631,8 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			edge_g, true);
 	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
-	BOOST_VERIFY(num_vertices == num_vertices1);
-	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
-		% num_vertices;
+	assert(num_vertices == num_vertices1);
+	printf("%lu vertices are checked\n", num_vertices);
 }
 
 void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
@@ -1657,11 +1652,11 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 	};
 	size_t num_vertices = check_all_vertices(reader, idx, get_in_part_info_func(),
 			edge_g, true);
-	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
+	size_t num_vertices1 = check_all_vertices(reader, idx,
+            get_out_part_info_func(),
 			edge_g, false);
-	BOOST_VERIFY(num_vertices == num_vertices1);
-	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
-		% num_vertices;
+	assert(num_vertices == num_vertices1);
+	printf("%lu vertices are checked\n", num_vertices);
 }
 
 bool disk_serial_graph::dump(const std::string &index_file,
@@ -1672,13 +1667,11 @@ bool disk_serial_graph::dump(const std::string &index_file,
 
 	// Write the adjacency lists to the graph file.
 	if (!name_graph_file(graph_file)) {
-		BOOST_LOG_TRIVIAL(error) << std::string(
-				"can't name the graph file to ") + graph_file;
+        std::cerr << "can't name the graph file to " << graph_file << std::endl;
 		return false;
 	}
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% seconds to dump the graph") % time_diff(start, end);
+	printf("It takes %.5f seconds to dump the graph\n", time_diff(start, end));
 
 	start = end;
 	graph_header header(get_graph_type(), this->get_num_vertices(),
@@ -1687,8 +1680,7 @@ bool disk_serial_graph::dump(const std::string &index_file,
 	creator->create_writer(index_file)->write((const char *) index.get(),
 			index->get_index_size());
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% seconds to dump the index") % time_diff(start, end);
+    printf("It takes %.5f seconds to dump the index\n", time_diff(start, end));
 	return true;
 }
 
@@ -1750,7 +1742,7 @@ class gz_graph_file_io: public graph_file_io
 	gzFile f;
 public:
 	gz_graph_file_io(const std::string file) {
-		BOOST_LOG_TRIVIAL(info) << (std::string("read gz file: ") + file);
+        std::cout << "read gz file: " << file << std::endl;
 		f = gzopen(file.c_str(), "rb");
 		prev_buf_bytes = 0;
 		prev_buf.resize(PAGE_SIZE);
@@ -1788,7 +1780,7 @@ std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
 		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
-				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
+                std::cerr << gzerror(f, &ret);
 				exit(1);
 			}
 		}
@@ -1861,7 +1853,7 @@ std::unique_ptr<char[]> text_graph_file_io::read_edge_list_text(
 
 	// The line buffer must end with '\0'.
 	char *line_buf = new char[read_bytes + 1];
-	BOOST_VERIFY(fread(line_buf, read_bytes, 1, f) == 1);
+	assert(fread(line_buf, read_bytes, 1, f) == 1);
 	line_buf[read_bytes] = 0;
 
 	return std::unique_ptr<char[]>(line_buf);
@@ -2032,9 +2024,8 @@ void text_edge_file_task<edge_data_type>::run()
 #ifdef USE_GZIP
 		io = graph_file_io::ptr(new gz_graph_file_io(file_name));
 #else
-		BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
-		BOOST_LOG_TRIVIAL(error)
-			<< "zlib is required to support reading gz file";
+        std::cerr << "Doesn't support reading gz file\n";
+	    std::cerr << "zlib is required to support reading gz file\n";
 		exit(1);
 #endif
 	}
@@ -2053,8 +2044,8 @@ void text_edge_file_task<edge_data_type>::run()
 		local_edge_buf->add(edges);
 	}
 
-	std::cout << boost::format("There are %1% edges in thread %2%\n")
-		% local_edge_buf->size() % thread::get_curr_thread()->get_id();
+    std::cout << "There are " << local_edge_buf->size() <<
+        "edges in thread " << thread::get_curr_thread()->get_id() << "\n";
 }
 
 template<class edge_data_type>
@@ -2157,7 +2148,7 @@ void write_graph_thread::run()
 			usleep(10000);
 		}
 
-		BOOST_FOREACH(subgraph_ptr subg, copy) {
+		for (subgraph_ptr subg : copy) {
 			subgraphs.push(subg);
 		}
 
@@ -2175,7 +2166,7 @@ void write_graph_thread::run()
 		}
 	} while (curr_id <= max_id);
 	g.finalize_graph_file();
-	BOOST_LOG_TRIVIAL(info) << boost::format("write %1% vertices") % curr_id;
+	printf("write %d vertices\n", curr_id);
 	stop();
 }
 
@@ -2304,7 +2295,7 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "start to serialize an undirected graph";
+	printf("start to serialize an undirected graph\n");
 	serial_graph::ptr g = create_serial_graph(creator);
 	std::vector<edge_stream_t> its;
 	for (size_t i = 0; i < edge_lists.size(); i++)
@@ -2321,8 +2312,7 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 	write_graph_thread *write_thread = new write_graph_thread(*g, max_id);
 	write_thread->start();
 
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"start to construct the graph. max id: %1%") % max_id;
+    printf("start to construct the graph. max id: %u\n", max_id);
 
 	int thread_no = 0;
 	for (vertex_id_t id = 0; id <= max_id; ) {
@@ -2348,13 +2338,12 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 	}
 	write_thread->join();
 	delete write_thread;
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"serial graph has %1% edges, edge graph has %2% edges")
-			% g->get_num_edges() % get_num_edges();
+    std::cout << "serial graph has" << g->get_num_edges() <<
+        "edges, edge graph has " << get_num_edges() << "edges\n" << std::endl;
 	assert(g->get_num_edges() == get_num_edges());
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% to serialize an undirected graph") % time_diff(start, end);
+    printf("It takes .%5f to serialize an undirected graph\n",
+            time_diff(start, end));
 	return g;
 }
 
@@ -2364,7 +2353,7 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "start to serialize a directed graph";
+	printf("start to serialize a directed graph");
 	serial_graph::ptr g = create_serial_graph(creator);
 	assert(in_edge_lists.size() == out_edge_lists.size());
 	for (size_t i = 0; i < in_edge_lists.size(); i++)
@@ -2388,8 +2377,7 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	write_graph_thread *write_thread = new write_graph_thread(*g, max_id);
 	write_thread->start();
 
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-				"start to construct the graph. max id: %1%") % max_id;
+	printf("start to construct the graph. max id: %u\n", max_id);
 
 	int thread_no = 0;
 	for (vertex_id_t id = 0; id <= max_id; ) {
@@ -2422,8 +2410,8 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	delete write_thread;
 	assert(g->get_num_edges() == get_num_edges());
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% to serialize a directed graph") % time_diff(start, end);
+    printf("It takes %.5f to serialize a directed graph\n",
+            time_diff(start, end));
 	return g;
 }
 
@@ -2437,7 +2425,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "start to construct edge list";
+	printf("start to construct edge list\n");
 	std::vector<task_thread *> threads(num_threads);
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
@@ -2453,20 +2441,18 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	if (files.size() == 1) {
 		const std::string file = files[0];
 		if (!safs::file_exist(file)) {
-			BOOST_LOG_TRIVIAL(error) << file << " doesn't exist";
+            std::cerr << file << " doesn't exist";
 			return edge_graph::ptr();
 		}
 
-		BOOST_LOG_TRIVIAL(info) << (std::string(
-					"start to read the edge list from ") + file.c_str());
+        std::cout << "start to read the edge list from " << file << std::endl;
 		graph_file_io::ptr io;
 		if (is_compressed(file)) {
 #ifdef USE_GZIP
 			io = graph_file_io::ptr(new gz_graph_file_io(file));
 #else
-			BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
-			BOOST_LOG_TRIVIAL(error)
-				<< "zlib is required to support reading gz file";
+            std::cerr << "Doesn't support reading gz file\n";
+            std::cerr << "zlib is required to support reading gz file\n";
 			exit(1);
 #endif
 		}
@@ -2484,7 +2470,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	else {
 		for (size_t i = 0; i < files.size(); i++) {
 			if (!safs::file_exist(files[i])) {
-				BOOST_LOG_TRIVIAL(error) << files[i] << " doesn't exist";
+                std::cerr << files[i] << " doesn't exist\n";
 				continue;
 			}
 			thread_task *task = new text_edge_file_task<edge_data_type>(files[i]);
@@ -2495,10 +2481,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	for (int i = 0; i < num_threads; i++)
 		threads[i]->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% seconds to construct edge list") % time_diff(start, end);
+    printf("It takes %.5f seconds to construct edge list\n",
+            time_diff(start, end));
 	start = end;
-	BOOST_LOG_TRIVIAL(info) << "start to construct an edge graph";
+    printf("start to construct an edge graph\n");
 
 	size_t num_edges = 0;
 	std::vector<typename el_container<edge_data_type>::ptr> edge_lists(num_threads);
@@ -2508,7 +2494,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 		num_edges += local_edges->size();
 		edge_lists[i] = typename el_container<edge_data_type>::ptr(local_edges);
 	}
-	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% edges") % num_edges;
+	printf("There are %lu edges\n", num_edges);
 
 	size_t edge_data_size = has_edge_data ? sizeof(edge_data_type) : 0;
 	edge_graph::ptr edge_g;
@@ -2520,10 +2506,9 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 					edge_lists, edge_data_size));
 	gettimeofday(&end, NULL);
 
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% seconds to construct an edge graph") % time_diff(start, end);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"There are %1% edges in the edge graph") % edge_g->get_num_edges();
+    printf("It takes %.5f seconds to construct an edge graph\n",
+            time_diff(start, end));
+    printf("There are %lu edges in the edge graph\n", edge_g->get_num_edges());
 
 	for (int i = 0; i < num_threads; i++) {
 		threads[i]->stop();
@@ -2537,7 +2522,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
 		int edge_attr_type, bool directed, bool in_mem)
 {
-	BOOST_LOG_TRIVIAL(info) << "beofre load edge list";
+	printf("before load edge list\n");
 	edge_graph::ptr g;
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
@@ -2558,14 +2543,12 @@ edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
 		large_io_creator::ptr creator)
 {
-	BOOST_LOG_TRIVIAL(info) << "before sorting edges";
+	printf("before sorting edges\n");
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	edge_g->sort_edges();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"It takes %1% seconds to sort edge list") % time_diff(start, end);
-
+    printf("It takes %.5f seconds to sort edge list\n", time_diff(start, end));
 	return edge_g->serialize_graph(creator);
 }
 
@@ -2573,9 +2556,8 @@ edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 		const std::vector<vertex_id_t> to, int edge_attr_type, bool directed)
 {
 	if (from.size() != to.size()) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"from vector (%1%) and to vector (%2%) have different length")
-			% from.size() % to.size();
+        printf("from vector (%lu) and to vector (%lu) have different length\n",
+                from.size(), to.size());
 		return edge_graph::ptr();
 	}
 
@@ -2691,8 +2673,8 @@ ssize_t native_large_writer::flush()
 	do {
 		ssize_t ret = ::write(fd, tmp, bytes);
 		if (ret < 0) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"fail to write %1% bytes: %2%") % bytes % strerror(errno);
+            std::cerr << "fail to write " <<  bytes << " bytes: "
+                << errno << "\n";
 			return ret;
 		}
 		tmp += ret;
@@ -2731,8 +2713,7 @@ native_large_writer::native_large_writer(const std::string &file)
 	file_name = file;
 	fd = open(file.c_str(), O_WRONLY | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR | S_IRGRP);
 	if (fd < 0) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"fail to open %1%: %2%") % file % strerror(errno);
+        std::cerr << "fail to open " << file << ":" <<  errno << std::endl;
 		exit(1);
 	}
 
@@ -2748,8 +2729,7 @@ class native_large_reader: public large_reader
 	native_large_reader(const std::string &file) {
 		f = fopen(file.c_str(), "r");
 		if (f == NULL) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"fail to open %1%: %2%") % file % strerror(errno);
+            std::cerr << "fail to open " << file << ":" << errno << std::endl;
 			exit(1);
 		}
 	}

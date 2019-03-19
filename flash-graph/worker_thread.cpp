@@ -164,7 +164,7 @@ void default_vertex_queue::init(worker_thread &t)
 		active_vertices->force_bitmap();
 		index.get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
 				vpart_ps_tmp.size());
-		BOOST_FOREACH(vpart_vertex_pointer p, vpart_ps_tmp) {
+		for (vpart_vertex_pointer p : vpart_ps_tmp) {
 			int part_id;
 			off_t off;
 			graph.get_partitioner()->map2loc(p.get_vertex_id(), part_id, off);
@@ -277,7 +277,7 @@ void customized_vertex_queue::get_compute_vertex_pointers(
 	for (int i = 0; i < graph_conf.get_num_vparts(); i++) {
 		off_t start = vertices.size() + i * vpart_ps.size();
 		off_t end = start + vpart_ps.size();
-		BOOST_VERIFY((size_t) end <= sorted_vertices.size());
+		assert((size_t) end <= sorted_vertices.size());
 		index.get_vpart_vertices(part_id, i, vpart_ps.data(), vpart_ps.size(),
 				sorted_vertices.data() + start);
 	}
@@ -440,7 +440,7 @@ void worker_thread::init()
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(started_vertices, false);
 		if (vinitializer) {
-			BOOST_FOREACH(vertex_id_t id, started_vertices) {
+			for (vertex_id_t id : started_vertices) {
 				compute_vertex &v = graph->get_vertex(id);
 				vinitializer->init(v);
 			}
@@ -454,16 +454,15 @@ void worker_thread::init()
 				graph->get_num_vertices(), local_ids);
 
 		std::vector<vertex_id_t> kept_ids;
-		BOOST_FOREACH(vertex_id_t id, local_ids) {
+		for (vertex_id_t id : local_ids) {
 			compute_vertex &v = graph->get_vertex(id);
 			if (filter && filter->keep(*vprogram, v))
 				kept_ids.push_back(id);
 		}
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(kept_ids, false);
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("worker %1% has %2% vertices and activates %3% of them")
-			% worker_id % local_ids.size() % kept_ids.size();
+	    printf("worker %d has %lu vertices and activates %lu of them\n",
+                worker_id, local_ids.size(), kept_ids.size());
 	}
 	// If a user wants to start all vertices.
 	else if (start_all) {
@@ -475,7 +474,7 @@ void worker_thread::init()
 			std::vector<vertex_id_t> local_ids;
 			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
 					graph->get_num_vertices(), local_ids);
-			BOOST_FOREACH(vertex_id_t id, local_ids) {
+			for (vertex_id_t id : local_ids) {
 				compute_vertex &v = graph->get_vertex(id);
 				vinitializer->init(v);
 			}
@@ -484,9 +483,7 @@ void worker_thread::init()
 
 	bool ret = graph->progress_first_level();
 	if (ret)
-		BOOST_LOG_TRIVIAL(warning)
-			<< boost::format("worker %1% has no active vertices")
-			% get_worker_id();
+	    std::cout << "worker " << get_worker_id() << " has no active vertices\n";
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads,
@@ -547,7 +544,7 @@ size_t worker_thread::enter_next_level()
 			vertex_buf.clear();
 			notify_vertices->get_reset_set_bits(i,
 					min(i + stride, notify_vertices->get_num_bits()), vertex_buf);
-			BOOST_FOREACH(vertex_id_t id, vertex_buf) {
+			for (vertex_id_t id : vertex_buf) {
 				local_vid_t local_id(id);
 				compute_vertex &v = graph->get_vertex(worker_id, local_id);
 				vprogram->notify_iteration_end(v);
@@ -598,9 +595,9 @@ void worker_thread::run()
 		assert(curr_activated_vertices->is_empty());
 		assert(num_visited == num_activated_vertices_in_level.get());
 		if (num_visited != num_completed_vertices_in_level.get()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("worker %1%: visits %2% vertices and completes %3%")
-				% worker_id % num_visited % num_completed_vertices_in_level.get();
+            fprintf(stderr, "worker %d: visits %d vertices and completes %ld\n",
+                    worker_id, num_visited,
+                    num_completed_vertices_in_level.get());
 		}
 		assert(num_visited == num_completed_vertices_in_level.get());
 

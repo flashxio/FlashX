@@ -22,7 +22,6 @@
 #include <fcntl.h>
 
 #include <string>
-#include <boost/format.hpp>
 
 #include "io_interface.h"
 #include "native_file.h"
@@ -76,7 +75,7 @@ public:
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
 		long new_off = lseek(fd, off, SEEK_SET);
-		BOOST_VERIFY(new_off == off);
+		assert(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
 		if (ret < 0) {
 			perror("complete_read");
@@ -137,15 +136,14 @@ public:
 		assert(read_bytes > 0);
 		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
-		BOOST_VERIFY(ret == read_bytes);
+		assert(ret == read_bytes);
 		verified_bytes += read_bytes;
 		for (size_t i = 0; i < read_bytes; i++) {
 			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
 				struct block_identifier bid;
 				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
-				BOOST_LOG_TRIVIAL(error) << boost::format(
-						"bytes at %1% (in partition %2%) doesn't match")
-					% (rqs[0]->get_offset() + i) % bid.idx;
+                std::cerr << "bytes at " << (rqs[0]->get_offset() + i) <<
+                    "(in partition "<< bid.idx << ") doesn't match\n";
 			}
 		}
 		return 0;
@@ -197,7 +195,7 @@ void comm_verify_file(int argc, char *argv[])
 		io->wait4complete(1);
 	}
 	printf("verify %ld bytes\n", cb->get_verified_bytes());
-	
+
 	io->cleanup();
 }
 
@@ -254,7 +252,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	native_dir dir(part_path);
 	assert(!dir.exist());
 	bool ret = dir.create_dir(false);
-	BOOST_VERIFY(ret);
+	assert(ret);
 
 	std::string file_path = part_path + "/" + std::string(argv[2]);
 	FILE *out_f = fopen(file_path.c_str(), "w");
@@ -335,7 +333,7 @@ void comm_create_file(int argc, char *argv[])
 		off += write_bytes;
 	}
 	printf("write all data\n");
-	
+
 	io->cleanup();
 }
 
@@ -418,7 +416,7 @@ void comm_export(int argc, char *argv[])
 	assert(file_size <= phy_file_size);
 	if (file_size == 0)
 		file_size = phy_file_size;
-	
+
 	size_t buf_size = 16 * 1024 * 1024;
 	char *buf = (char *) valloc(buf_size);
 	assert(buf);

@@ -51,7 +51,7 @@ void vertex_compute::finish_run()
 	if (get_num_pending() == 0) {
 		// this is to double check. If there are pending requests,
 		// the vertex shouldn't have issued requests in this run.
-		BOOST_VERIFY(!issued_reqs);
+		assert(!issued_reqs);
 		issue_thread->complete_vertex(v);
 	}
 }

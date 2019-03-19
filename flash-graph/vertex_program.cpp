@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-#include <boost/assert.hpp>
-
 #include "thread.h"
 
 #include "vertex_program.h"
@@ -78,7 +76,7 @@ void vertex_program::multicast_msg(vertex_id_t ids[], int num,
 		vertex_message &msg)
 {
 	assert(!msg.is_flush());
-	BOOST_VERIFY(t == (worker_thread *) thread::get_curr_thread());
+	assert(t == (worker_thread *) thread::get_curr_thread());
 
 	if (num == 0)
 		return;
@@ -97,7 +95,7 @@ void vertex_program::multicast_msg(vertex_id_t ids[], int num,
 
 		multicast_msg_sender &sender = get_multicast_sender(i);
 		sender.init(msg);
-		BOOST_VERIFY((size_t) sender.add_dests(vid_bufs[i].data(),
+		assert((size_t) sender.add_dests(vid_bufs[i].data(),
 					vid_bufs[i].size()) == vid_bufs[i].size());
 		vid_bufs[i].clear();
 		sender.end_multicast();
@@ -107,7 +105,7 @@ void vertex_program::multicast_msg(vertex_id_t ids[], int num,
 void vertex_program::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 {
 	assert(!msg.is_flush());
-	BOOST_VERIFY((worker_thread *) thread::get_curr_thread() == t);
+	assert((worker_thread *) thread::get_curr_thread() == t);
 
 	int num_dests = it.get_num_tot_entries();
 	if (num_dests == 0)
@@ -128,7 +126,7 @@ void vertex_program::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 
 		multicast_msg_sender &sender = get_multicast_sender(i);
 		sender.init(msg);
-		BOOST_VERIFY((size_t) sender.add_dests(vid_bufs[i].data(),
+		assert((size_t) sender.add_dests(vid_bufs[i].data(),
 					vid_bufs[i].size()) == vid_bufs[i].size());
 		vid_bufs[i].clear();
 		sender.end_multicast();
@@ -137,7 +135,7 @@ void vertex_program::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 
 void vertex_program::send_msg(vertex_id_t dest, vertex_message &msg)
 {
-	BOOST_VERIFY(t == (worker_thread *) thread::get_curr_thread());
+	assert(t == (worker_thread *) thread::get_curr_thread());
 
 	int part_id;
 	// We are going to use the offset of a vertex in a partition as
@@ -165,7 +163,7 @@ void vertex_program::send_msg(vertex_id_t dest, vertex_message &msg)
 void vertex_program::activate_vertices(vertex_id_t ids[], int num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	BOOST_VERIFY(curr == t);
+	assert(curr == t);
 
 	if (num == 0)
 		return;
@@ -179,7 +177,7 @@ void vertex_program::activate_vertices(vertex_id_t ids[], int num)
 			off_t local_id;
 			graph->get_partitioner()->map2loc(ids[i], part_id, local_id);
 			multicast_msg_sender &sender = get_activate_sender(part_id);
-			BOOST_VERIFY(sender.add_dest((local_vid_t) local_id));
+			assert(sender.add_dest((local_vid_t) local_id));
 		}
 		return;
 	}
@@ -191,7 +189,7 @@ void vertex_program::activate_vertices(vertex_id_t ids[], int num)
 		if (vid_bufs[i].empty())
 			continue;
 		int ret = sender.add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		BOOST_VERIFY((size_t) ret == vid_bufs[i].size());
+		assert((size_t) ret == vid_bufs[i].size());
 		vid_bufs[i].clear();
 	}
 }
@@ -219,7 +217,7 @@ void vertex_program::activate_vertices(edge_seq_iterator &it)
 				// the ID of the vertex.
 				local_vid_t local_id = vertex_locs[i].second;
 				multicast_msg_sender &sender = get_activate_sender(part_id);
-				BOOST_VERIFY(sender.add_dest(local_id));
+				assert(sender.add_dest(local_id));
 			}
 		}
 		return;
@@ -237,7 +235,7 @@ void vertex_program::activate_vertices(edge_seq_iterator &it)
 		}
 		else {
 			int ret = sender.add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-			BOOST_VERIFY((size_t) ret == vid_bufs[i].size());
+			assert((size_t) ret == vid_bufs[i].size());
 			vid_bufs[i].clear();
 		}
 	}

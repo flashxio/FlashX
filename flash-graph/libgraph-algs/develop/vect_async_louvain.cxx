@@ -275,10 +275,11 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 
 #if 0
 	/** DEBUG **/
-	BOOST_LOG_TRIVIAL(info) << "v" << my_id << " in c" << cluster_id <<
-		" ==> (vol="<< g_volume_vec[cluster_id] << ", wgt=" << g_weight_vec[cluster_id] << ")" <<
-		"processing neigh in cluster: (vol=" << g_volume_vec[neigh_cluster_id] << ", wgt=" <<
-		g_weight_vec[neigh_cluster_id] << ")";
+	std::cout << "v" << my_id << " in c" << cluster_id <<
+		" ==> (vol="<< g_volume_vec[cluster_id] << ", wgt=" <<
+        g_weight_vec[cluster_id] << ")" <<
+		"processing neigh in cluster: (vol=" << g_volume_vec[neigh_cluster_id]
+        << ", wgt=" << g_weight_vec[neigh_cluster_id] << ")";
 	/** GUBED **/
 #endif
 
@@ -292,7 +293,7 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 	if (delta_mod > this->max_modularity) {
 #if 1
 		/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " moved from c" <<  cluster_id << " to c"
+		std::cout << "v" << my_id << " moved from c" <<  cluster_id << " to c"
 		   << neigh_cluster_id << ", delta_mod = "<< delta_mod << "\n";
 		/** GUBED **/
 #endif
@@ -306,8 +307,10 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 	} else {
 #if 1
 		/** DEBUG **/
-		BOOST_LOG_TRIVIAL(info) << "v" << my_id << " with max_mod = " << max_modularity << " stayed in c"
-			<< cluster_id << " because delta_mod = "<< delta_mod << " for c" << neigh_cluster_id << "\n";
+		std::cout << "v" << my_id << " with max_mod = "
+            << max_modularity << " stayed in c"
+			<< cluster_id << " because delta_mod = " <<
+            delta_mod << " for c" << neigh_cluster_id << "\n";
 		/** GUBED **/
 #endif
 	}
@@ -348,8 +351,9 @@ namespace fg
 				fg->get_graph_header());
 		graph_engine::ptr graph = fg->create_engine(index);
 
-		BOOST_LOG_TRIVIAL(info) << "Starting Louvain with " << levels << " levels";
-		BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file().c_str();
+		std::cout << "Starting Louvain with " << levels << " levels\n";
+		std::cout << "prof_file: " << graph_conf.get_prof_file().c_str()
+            << std::endl;
 #ifdef PROFILER
 		if (!graph_conf.get_prof_file().empty())
 			ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -358,7 +362,7 @@ namespace fg
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		// Resize weight and volume vectors
-		BOOST_LOG_TRIVIAL(info) << "Resizing vectors to " << graph->get_num_vertices() << "\n";
+		std::cout << "Resizing vectors to " << graph->get_num_vertices() << "\n";
 		g_weight_vec.resize(graph->get_num_vertices(), atomicwrapper<uint32_t>(0));
 		g_volume_vec.resize(graph->get_num_vertices(), atomicwrapper<uint32_t>(0));
 
@@ -370,36 +374,36 @@ namespace fg
 		// Aggregate the global edge-weight
 		std::vector<vertex_program::ptr> ec_progs;
 		graph->get_vertex_programs(ec_progs);
-		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+		for (vertex_program::ptr vprog : ec_progs) {
 			louvain_vertex_program::ptr lvp = louvain_vertex_program::cast2(vprog);
 			g_edge_weight += lvp->get_local_ec();
 		}
-		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
+		std::cout << "The graph's total edge weight is " << g_edge_weight << "\n";
 
 		int iter = 0;
 		do {
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++
-				<< " ********************************\x1B[0m\n\n";
+			std::cout << "\n\n\x1B[31m****************** LEVEL ITERATION: "
+                << iter++ << " ********************************\x1B[0m\n\n";
 
 #if 1
 			/** DEBUG **/
             std::vector<cluster_id_t> ret(graph->get_num_vertices());
 			graph->query_on_all(vertex_query::ptr(
                         new save_query<cluster_id_t, louvain_vertex>(ret)));
-			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
+			std::cout << "Printing vertex clusters:";
 			/** GUBED **/
 #endif
 #if 1
 			/** DEBUG **/
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
-			BOOST_LOG_TRIVIAL(info) << "Global volume vector:";
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
+			std::cout << "Global volume vector:\n";
 			print_atomicwrapper_v(g_volume_vec);
 
-			BOOST_LOG_TRIVIAL(info) << "Global weight vector:";
+			std::cout << "Global weight vector:\n";
 			print_atomicwrapper_v(g_weight_vec);
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
 			/** GUBED **/
 
 			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); }
@@ -416,12 +420,12 @@ namespace fg
         std::vector<cluster_id_t> ret (graph->get_num_vertices());
 		graph->query_on_all(vertex_query::ptr(
                     new save_query<cluster_id_t, louvain_vertex>(ret)));
-		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
+		std::cout << "\nVertex clusters @ end of Level1:\n";
 		/** GUBED **/
 #endif
 
 		louvain_stage = REBUILD; // TODO: Do something here
-		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n";
+		std::cout << "\n Reached rebuild graph stage\n";
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER
@@ -429,8 +433,7 @@ namespace fg
 			ProfilerStop();
 #endif
 
-		BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
-			% time_diff(start, end);
+		printf("It takes %.5f seconds\n", time_diff(start, end));
 
 		return;
 	}

@@ -405,8 +405,7 @@ std::vector<vertex_id_t> compute_cc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on an undirected graph";
+        printf("This algorithm works on an undirected graph\n");
         return std::vector<vertex_id_t>();
 	}
 
@@ -415,7 +414,7 @@ std::vector<vertex_id_t> compute_cc(FG_graph::ptr fg)
 	graph_index::ptr index = NUMA_graph_index<cc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
-	BOOST_LOG_TRIVIAL(info) << "connected components starts";
+	printf("connected components starts\n");
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -429,9 +428,7 @@ std::vector<vertex_id_t> compute_cc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new cc_vertex_program_creater<cc_vertex>()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("WCC takes %1% seconds in total")
-		% time_diff(start, end);
+	printf("WCC takes %.5f seconds in total\n", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -448,15 +445,14 @@ std::vector<vertex_id_t> compute_wcc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+        printf("This algorithm works on a directed graph\n");
         return std::vector<vertex_id_t>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
-	BOOST_LOG_TRIVIAL(info) << "weakly connected components starts";
+	printf("weakly connected components starts\n");
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -472,9 +468,7 @@ std::vector<vertex_id_t> compute_wcc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<wcc_vertex>()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("WCC takes %1% seconds in total")
-		% time_diff(start, end);
+    printf("WCC takes %.5f seconds in total\n", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -491,15 +485,14 @@ std::vector<vertex_id_t> compute_sync_wcc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+	    fprintf(stderr, "This algorithm works on a directed graph\n");
         return std::vector<vertex_id_t>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<sync_wcc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
-	BOOST_LOG_TRIVIAL(info) << "synchronous weakly connected components starts";
+	printf("synchronous weakly connected components starts\n");
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -515,9 +508,7 @@ std::vector<vertex_id_t> compute_sync_wcc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<sync_wcc_vertex>()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("WCC takes %1% seconds in total")
-		% time_diff(start, end);
+	printf("WCC takes %.5f seconds in total\n", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -535,16 +526,15 @@ std::vector<vertex_id_t> compute_ts_wcc(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+        fprintf(stderr, "This algorithm works on a directed graph\n");
         return std::vector<vertex_id_t>();
-	}
+    }
 
-	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
-			fg->get_graph_header());
-	graph_engine::ptr graph = fg->create_engine(index);
-	assert(graph->get_graph_header().has_edge_data());
-	BOOST_LOG_TRIVIAL(info) << "TS weakly connected components starts";
+    graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
+            fg->get_graph_header());
+    graph_engine::ptr graph = fg->create_engine(index);
+    assert(graph->get_graph_header().has_edge_data());
+    printf("TS weakly connected components starts");
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -560,9 +550,7 @@ std::vector<vertex_id_t> compute_ts_wcc(FG_graph::ptr fg,
 				new ts_wcc_vertex_program_creater(start_time, time_interval)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("WCC takes %1% seconds in total")
-		% time_diff(start, end);
+    printf("WCC takes %.5f seconds in total", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

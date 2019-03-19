@@ -229,11 +229,12 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 	neighbors->resize(num_neighbors);
 
 	size_t lscan = 0;
-	BOOST_FOREACH(vertex_id_t id, in_neighbors) {
+	for (vertex_id_t id : in_neighbors) {
 		if (id != curr_id)
 			lscan++;
 	}
-	BOOST_FOREACH(vertex_id_t id, out_neighbors) {
+
+	for (vertex_id_t id : out_neighbors) {
 		if (id != curr_id)
 			lscan++;
 	}
@@ -346,9 +347,8 @@ std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("scan statistics starts, start: %1%, interval: %2%, #interval: %3%")
-		% timestamp % time_interval % num_time_intervals;
+    std::cout << "Scan statistics starts, start: " << timestamp << ", interval: "
+        << time_interval <<  ", #interval: " << num_time_intervals << std::endl;
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -364,8 +364,7 @@ std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	BOOST_LOG_TRIVIAL(info)
-			<< boost::format("It takes %1% seconds") % time_diff(start, end);
+	std::cout << "It takes " << time_diff(start, end) << "seconds\n";
 
     std::vector<float> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(

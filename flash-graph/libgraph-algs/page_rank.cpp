@@ -202,15 +202,13 @@ std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+		fprintf(stderr, "This algorithm works on a directed graph\n");
         return std::vector<float>();
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		BOOST_LOG_TRIVIAL(fatal)
-			<< "Damping factor must be between 0 and 1 inclusive";
+		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
         return std::vector<float>();
 	}
 
@@ -218,10 +216,9 @@ std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	max_num_iters = num_iters;
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("Pagerank (at maximal %1% iterations) starting")
-		% max_num_iters;
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("Pagerank (at maximal %d iterations) starting\n",
+            max_num_iters);
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -246,9 +243,7 @@ std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds in total")
-		% time_diff(start, end);
+		printf("It takes %.5f seconds in total\n", time_diff(start, end));
     return res;
 }
 
@@ -257,15 +252,14 @@ std::vector<float> compute_pagerank2(FG_graph::ptr fg, int num_iters,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+        fprintf(stderr,
+                "This algorithm works on a directed graph\n");
         return std::vector<float>();
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		BOOST_LOG_TRIVIAL(fatal)
-			<< "Damping factor must be between 0 and 1 inclusive";
+        fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
         return std::vector<float>();
 	}
 
@@ -273,10 +267,9 @@ std::vector<float> compute_pagerank2(FG_graph::ptr fg, int num_iters,
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	max_num_iters = num_iters;
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("Pagerank (at maximal %1% iterations) starting")
-		% max_num_iters;
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+    printf("Pagerank (at maximal %d iterations) starting\n",
+            max_num_iters);
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -297,10 +290,9 @@ std::vector<float> compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds in total")
-		% time_diff(start, end);
-	return res;
+    printf("It takes %.5f seconds in total\n",
+            time_diff(start, end));
+    return res;
 }
 
 }

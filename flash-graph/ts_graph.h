@@ -44,7 +44,7 @@ static inline time_t conv_str_to_time(const std::string &str)
 {
 	struct tm tm;
 	memset(&tm, 0, sizeof(tm));
-	BOOST_VERIFY(strptime(str.c_str(), "%Y-%m-%d", &tm));
+	assert(strptime(str.c_str(), "%Y-%m-%d", &tm));
 	tm.tm_isdst = 1;
 	return mktime(&tm);
 }

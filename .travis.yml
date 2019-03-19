@@ -4,7 +4,7 @@ notifications:
   email: false
 before_install:
 - sudo apt-get update
-- sudo apt-get install -y cmake libboost-dev libboost-system-dev libboost-filesystem-dev libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev numactl
+- sudo apt-get install -y cmake libnuma-dev libaio-dev libhwloc-dev libatlas-base-dev zlib1g-dev numactl
 compiler:
 - g++
 script:

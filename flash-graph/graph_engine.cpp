@@ -55,7 +55,7 @@ struct prio_compute
 
 	prio_compute(io_interface *io, user_compute *compute) {
 		this->compute = compute;
-		BOOST_VERIFY(compute->fetch_request(io, req));
+		assert(compute->fetch_request(io, req));
 	}
 };
 
@@ -612,9 +612,8 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 	init(index);
 
 	gettimeofday(&init_end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("It takes %1% seconds to initialize the graph engine")
-		% time_diff(init_start, init_end);
+    std::cout << "It takes " << time_diff(init_start, init_end) <<
+        " seconds to initialize the graph engine\n";
 }
 
 graph_engine::~graph_engine()
@@ -684,8 +683,7 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
 		if (ids[i] > this->get_max_vertex_id()) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"invalid vertex Id: %1%") % ids[i];
+            std::cerr << "invalid vertex Id: " << ids[i] << std::endl;
 			return;
 		}
 		int idx = get_partitioner()->map(ids[i]);
@@ -706,7 +704,7 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
-	BOOST_FOREACH(worker_thread *t, worker_threads) {
+	for (worker_thread *t : worker_threads) {
 		t->start_vertices(filter);
 		t->start();
 	}
@@ -719,7 +717,7 @@ void graph_engine::start_all(vertex_initializer::ptr init,
 	level = 0; // We always reset the level
 	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
-	BOOST_FOREACH(worker_thread *t, worker_threads) {
+	for (worker_thread *t : worker_threads) {
 		t->start_all_vertices(init);
 		t->start();
 	}
@@ -773,10 +771,11 @@ bool graph_engine::progress_next_level()
 		level.inc(1);
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("Iter %1% takes %2% seconds, and %3% vertices are in iter %4%")
-				% (level.get() - 1) % time_diff(iter_start, curr)
-				% tot_num_activates.get() % level.get();
+        printf("Iter %d takes %.5f seconds, and %lu vertices "
+                "are in iter %d\n", (level.get() - 1),
+                time_diff(iter_start, curr),
+				tot_num_activates.get(), level.get());
+
 		iter_start = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
@@ -805,43 +804,14 @@ void graph_engine::wait4complete()
 	}
 	struct timeval curr;
 	gettimeofday(&curr, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("The graph engine takes %1% seconds to complete")
-		% time_diff(start_time, curr);
+    printf("The graph engine takes %.5f seconds to complete\n",
+            time_diff(start_time, curr));
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 {
 	this->scheduler = scheduler;
 }
-
-#if 0
-void graph_engine::preload_graph()
-{
-	const int BLOCK_SIZE = 1024 * 1024 * 32;
-	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[BLOCK_SIZE]);
-
-	size_t cache_size = params.get_cache_size();
-	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-	size_t preload_size = min(cache_size,
-			index_factory->get_file_size());
-	cache_size -= preload_size;
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("preload %1% bytes of the index file")
-		% preload_size;
-	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
-		io->access(buf.get(), i, BLOCK_SIZE, READ);
-
-	io = graph_factory->create_io(thread::get_curr_thread());
-	preload_size = min(cache_size, graph_factory->get_file_size());
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("preload %1% bytes of the graph file")
-		% preload_size;
-	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
-		io->access(buf.get(), i, BLOCK_SIZE, READ);
-	BOOST_LOG_TRIVIAL(info) << "successfully preload";
-}
-#endif
 
 void graph_engine::init_vertices(vertex_id_t ids[], int num,
 		vertex_initializer::ptr init)
@@ -924,8 +894,7 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 		try {
 			init_io_system(configs);
 		} catch (safs::init_error &e) {
-			BOOST_LOG_TRIVIAL(warning)
-				<< "FlashGraph: fail to initialize SAFS";
+            fprintf(stderr, "FlashGraph: fail to initialize SAFS\n");
 		}
 
 		graph_conf.init(configs);

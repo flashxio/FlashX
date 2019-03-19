@@ -123,7 +123,6 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 
 	void add_visited_bfs(vertex_id_t vid) {
 		max_dist = get_graph().get_curr_level();
-		// BOOST_LOG_TRIVIAL(info) << "The current per thread max_dist is " << max_dist << "\n";
 		assert(max_dist == ((short)bfs_visited_vertices.size()) - 1);
 		bfs_visited_vertices.back()->push_back(vid);
 	}
@@ -141,7 +140,7 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 	void collect_vertices(vertex_map_t &vertices) {
 		vertex_map_t::const_iterator it = vertices.find(get_partition_id());
 		if (it != vertices.end())
-			BOOST_LOG_TRIVIAL(info) << "part" << it->first << "already exists";
+			std::cout << "part" << it->first << "already exists\n";
 		assert(it == vertices.end());
 		vertices.insert(vertex_map_t::value_type(get_partition_id(),
 					bfs_visited_vertices));
@@ -397,8 +396,7 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm currently works on a directed graph";
+        std::cerr << "This algorithm currently works on a directed graph\n";
         return std::vector<float>();
 	}
 
@@ -406,8 +404,8 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	BOOST_LOG_TRIVIAL(info) << "Starting Betweenness Centrality ...";
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file().c_str();
+	printf("Starting Betweenness Centrality ...\n");
+    std::cout << "prof_file: " << graph_conf.get_prof_file().c_str() << "\n";
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -416,7 +414,7 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 
-	BOOST_FOREACH (vertex_id_t id , ids) {
+	for (vertex_id_t id : ids) {
 		if (!graph->get_num_edges(id))
 		   continue;
 
@@ -424,7 +422,7 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		bfs_max_dist = 0; // Must reset bfs dist for each vertex
 		// BFS phase. Inintialize start vert(ex)(ices)
 		g_alg_phase = btwn_phase_t::bfs;
-		BOOST_LOG_TRIVIAL(info) << "Starting BFS for vertex: " << g_source_vertex;
+        std::cout << "Starting BFS for vertex: " << g_source_vertex << std::endl;
 		graph->init_all_vertices(vertex_initializer::ptr(
 					new btwn_initializer(&(graph->get_vertex(g_source_vertex)))));
 		graph->start(&g_source_vertex, 1, vertex_initializer::ptr(),
@@ -437,19 +435,19 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		vertex_program_creater::ptr bp_prog_creater
 			= vertex_program_creater::ptr(bp_prog_creater_ptr);
 
-		BOOST_FOREACH(vertex_program::ptr prog, programs) {
+		for (vertex_program::ptr prog : programs) {
 			bfs_vertex_program::cast2(prog)->collect_vertices(
 					bp_prog_creater_ptr->get_vertex_map());
 			bfs_max_dist = std::max(bfs_max_dist,
 					bfs_vertex_program::cast2(prog)->get_max_dist());
 		}
 
-		BOOST_LOG_TRIVIAL(info) << "Max dist for bfs is: " << bfs_max_dist << "...";
+        std::cout << "Max dist for bfs is: " << bfs_max_dist << "...\n";
 
 		if (bfs_max_dist > 0) {
 			// Back propagation phase
-			BOOST_LOG_TRIVIAL(info) << "Starting back_prop phase for vertex: "
-					<< g_source_vertex << "...";
+            std::cout << "Starting back_prop phase for vertex: "
+					<< g_source_vertex << "...\n";
 			g_alg_phase = btwn_phase_t::back_prop;
 
 			std::shared_ptr<vertex_filter> filter =
@@ -457,7 +455,7 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 
 			graph->start(filter, std::move(bp_prog_creater));
 			graph->wait4complete();
-			BOOST_LOG_TRIVIAL(info) << "BC summation step";
+            std::cout << "BC summation step\n";
 			g_alg_phase = bc_summation;
 			graph->start_all();
 			graph->wait4complete();
@@ -474,9 +472,7 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		ProfilerStop();
 #endif
 
-	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
-		% time_diff(start, end);
-
+    printf("It takes %.5f seconds\n", time_diff(start, end));
 	return res;
 }
 }

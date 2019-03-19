@@ -1114,16 +1114,15 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "This algorithm works on a directed graph";
+		fprintf(stderr, "This algorithm works on a directed graph\n");
         return std::vector<vertex_id_t>();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
-	BOOST_LOG_TRIVIAL(info) << "SCC starts";
-	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
+	printf("SCC starts\n");
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -1140,8 +1139,7 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("init takes %1% seconds.") % time_diff(start, end);
+	printf("init takes %.5f seconds.\n", time_diff(start, end));
 
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
@@ -1150,14 +1148,13 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 	graph->wait4complete();
 	std::vector<vertex_program::ptr> trim_vprogs;
 	graph->get_vertex_programs(trim_vprogs);
-	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
+	for (vertex_program::ptr vprog : trim_vprogs) {
 		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
 		num_comp1 += trim_vprog->get_num_trimmed();
 	}
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("trim1 takes %1% seconds. It trims %2% vertices")
-		% time_diff(start, end) % num_comp1;
+	printf("trim1 takes %.5f seconds. It trims %lu vertices\n",
+		time_diff(start, end), num_comp1);
 
 #if 0
 	scc_stage = scc_stage_t::TRIM2;
@@ -1166,7 +1163,7 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
 	graph->get_vertex_programs(trim_vprogs);
-	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
+	for(vertex_program::ptr vprog : trim_vprogs) {
 		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
 		num_comp2 += trim_vprog->get_num_trimmed();
 	}
@@ -1186,8 +1183,7 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 	graph->start(&max_v, 1);
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("FWBW takes %1% seconds") % time_diff(start, end);
+    printf("FWBW takes %.5f seconds\n", time_diff(start, end));
 
 	scc_stage = scc_stage_t::PARTITION;
 	gettimeofday(&start, NULL);
@@ -1198,7 +1194,7 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 	std::vector<vertex_program::ptr> part_vprogs;
 	graph->get_vertex_programs(part_vprogs);
 	size_t largest_comp_size = 0;
-	BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
+	for (vertex_program::ptr vprog : part_vprogs) {
 		part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
 		largest_comp_size += part_vprog->get_num_assigned();
 		active_vertices.insert(active_vertices.begin(),
@@ -1206,20 +1202,17 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 				part_vprog->get_remain_vertices().end());
 	}
 	gettimeofday(&end, NULL);
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("partition takes %1% seconds. Assign %2% vertices to components.")
-		% time_diff(start, end) % largest_comp_size;
-	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("after partition, finding %1% active vertices takes %2% seconds.")
-		% active_vertices.size() % time_diff(start, end);
+	printf("partition takes %.5f seconds. Assign %lu vertices to components.\n",
+            time_diff(start, end), largest_comp_size);
+	printf("after partition, finding %lu active vertices takes %.5f seconds.",
+		active_vertices.size(), time_diff(start, end));
 
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
 		graph->start(active_vertices.data(), active_vertices.size());
 		graph->wait4complete();
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("trim3 %1% vertices") % trim3_vertices.load();
+		printf("trim3 %lu vertices\n", trim3_vertices.load());
 		num_comp1 += trim3_vertices.load();
 
 		scc_stage = scc_stage_t::IN_WCC;
@@ -1236,8 +1229,7 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 
 		std::vector<vertex_id_t> fwbw_starts;
 		((post_wcc_query *) mdq1.get())->get_max_ids(fwbw_starts);
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("FWBW starts on %1% vertices") % fwbw_starts.size();
+		printf("FWBW starts on %lu vertices\n", fwbw_starts.size());
 		scc_stage = scc_stage_t::FWBW;
 		graph->start(fwbw_starts.data(), fwbw_starts.size(),
 				vertex_initializer::ptr(new fwbw_initializer()));
@@ -1253,8 +1245,9 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 		graph->get_vertex_programs(part_vprogs);
 		active_vertices.clear();
 		size_t fwbw_vertices = 0;
-		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
-			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+		for (vertex_program::ptr vprog : part_vprogs) {
+			part_vertex_program::ptr part_vprog =
+                    part_vertex_program::cast2(vprog);
 			// Count the number of vertices assigned to a component by FWBW.
 			fwbw_vertices += part_vprog->get_num_assigned();
 			// We figure out here the vertices that haven't been assigned to
@@ -1263,15 +1256,12 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
 		}
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("partitioning assigns %1% vertices to components.")
-			% fwbw_vertices;
-		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("There are %1% vertices left unassigned")
-			% active_vertices.size();
+		printf("partitioning assigns %lu vertices to components.\n",
+                fwbw_vertices);
+        printf("There are %lu vertices left unassigned\n",
+                active_vertices.size());
 	} while (!active_vertices.empty());
-	BOOST_LOG_TRIVIAL(info)
-			<< boost::format("scc takes %1% seconds") % time_diff(scc_start, end);
+			printf("scc takes %.5f seconds\n", time_diff(scc_start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

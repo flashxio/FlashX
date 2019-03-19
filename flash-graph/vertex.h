@@ -738,7 +738,7 @@ class page_directed_vertex: public page_vertex
 	const safs::page_byte_array *out_array;
 public:
 	static vertex_id_t get_id(const safs::page_byte_array &arr) {
-		BOOST_VERIFY(arr.get_size()
+		assert(arr.get_size()
 				>= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		return v.get_id();
@@ -753,7 +753,7 @@ public:
 	page_directed_vertex(const safs::page_byte_array &arr,
 			bool in_part): page_vertex(true) {
 		size_t size = arr.get_size();
-		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 
 		if (in_part) {
@@ -783,7 +783,7 @@ public:
 		this->out_array = &out_arr;
 
 		size_t size = in_arr.get_size();
-		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = in_arr.get<ext_mem_undirected_vertex>(0);
 		in_size = v.get_size();
 		assert(size >= in_size);
@@ -1047,11 +1047,11 @@ public:
 	page_undirected_vertex(const safs::page_byte_array &arr): page_vertex(
 			false), array(arr) {
 		size_t size = arr.get_size();
-		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		// We only want to know the header of the vertex, so we don't need to
 		// know what data type an edge has.
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
-		BOOST_VERIFY((unsigned) size >= v.get_size());
+		assert((unsigned) size >= v.get_size());
 		vertex_size = v.get_size();
 
 		id = v.get_id();

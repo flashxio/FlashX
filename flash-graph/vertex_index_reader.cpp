@@ -136,7 +136,7 @@ public:
 		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
 				// We need an additional entry.
 				index->get_data() + range.second + 1);
-		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
+		assert(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -170,7 +170,7 @@ public:
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
 		iterator_type it(*index, range);
-		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
+		assert(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -462,7 +462,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// two requests with one vertex compute.
 	if (type == edge_type::IN_EDGE) {
 		off_t first_off = it.get_curr_off();
-		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
+		assert(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_off() + it.get_curr_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -470,7 +470,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	}
 	else if (type == edge_type::OUT_EDGE) {
 		off_t first_off = it.get_curr_out_off();
-		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
+		assert(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -480,7 +480,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 		assert(type == edge_type::BOTH_EDGES);
 		off_t first_in_off = it.get_curr_off();
 		off_t first_out_off = it.get_curr_out_off();
-		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
+		assert(it.move_to(get_num_vertices() - 1));
 		off_t last_in_off = it.get_curr_off() + it.get_curr_size();
 		off_t last_out_off = it.get_curr_out_off() + it.get_curr_out_size();
 
@@ -577,10 +577,10 @@ static off_range_t get_in_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	BOOST_VERIFY(it.move_to(idx_entry_loc));
+	assert(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_off();
-	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
+	assert(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_off() + it.get_curr_size();
 	return off_range_t(first_off, last_off);
 }
@@ -590,10 +590,10 @@ static off_range_t get_out_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	BOOST_VERIFY(it.move_to(idx_entry_loc));
+	assert(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_out_off();
-	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
+	assert(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 	return off_range_t(first_off, last_off);
 }

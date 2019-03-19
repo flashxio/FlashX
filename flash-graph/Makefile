@@ -19,7 +19,7 @@ include ../Makefile.common
 
 CXXFLAGS += -I../libsafs
 
-all: libgraph unit-test tools libgraph-algs test-algs bindings utils
+all: libgraph unit-test libgraph-algs test-algs bindings utils
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -27,9 +27,6 @@ libgraph-algs: libgraph
 libgraph: $(OBJS)
 	rm -f libgraph.a
 	ar -cvq libgraph.a $(OBJS)
-
-tools: libgraph
-	$(MAKE) -C tools
 
 unit-test: libgraph
 	$(MAKE) -C unit-test
@@ -49,7 +46,6 @@ clean:
 	rm -f *~
 	rm -f libgraph.a
 	find -name core -delete
-	$(MAKE) clean -C tools
 	$(MAKE) clean -C unit-test
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs

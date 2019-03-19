@@ -1,5 +1,5 @@
-/**  
- * Copyright (c) 2009 Carnegie Mellon University. 
+/**
+ * Copyright (c) 2009 Carnegie Mellon University.
  *     All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +39,7 @@ namespace graphlab {
    * interface as boost::unordered_map, not necessarily
    * entirely STL compliant.
    */
-  template <typename Key, 
+  template <typename Key,
             size_t CuckooK = 3,
             typename IndexType = size_t,
             typename Hash = boost::hash<Key>,
@@ -125,7 +125,7 @@ namespace graphlab {
       typedef typename cuckoo_set_pow2::value_type value_type;
 
       insert_iterator(cuckoo_set_pow2* c):cmap(c) {}
-      
+
       insert_iterator operator++() {
         return (*this);
       }
@@ -140,7 +140,7 @@ namespace graphlab {
         cmap = i.cmap;
         return *this;
       }
-      
+
       insert_iterator& operator=(const value_type& v) {
         cmap->insert(v);
         return *this;
@@ -209,7 +209,7 @@ namespace graphlab {
 
       const_iterator(const cuckoo_set_pow2* cmap, typename cuckoo_set_pow2::stash_container_type::const_iterator stash_iter):
         cmap(cmap), in_stash(true), vec_iter(cmap->data_begin()), stash_iter(stash_iter) { }
-      
+
     };
 
 
@@ -281,11 +281,11 @@ namespace graphlab {
 
 
     private:
-      iterator(cuckoo_set_pow2* cmap, 
+      iterator(cuckoo_set_pow2* cmap,
                typename cuckoo_set_pow2::map_container_iterator vec_iter):
         cmap(cmap), in_stash(false), vec_iter(vec_iter) { }
 
-      iterator(cuckoo_set_pow2* cmap, 
+      iterator(cuckoo_set_pow2* cmap,
                typename cuckoo_set_pow2::stash_container_type::iterator stash_iter):
         cmap(cmap), in_stash(true), stash_iter(stash_iter) { }
 
@@ -369,7 +369,7 @@ namespace graphlab {
       reserve(reserve_size);
     }
 
-    cuckoo_set_pow2(const cuckoo_set_pow2& other): 
+    cuckoo_set_pow2(const cuckoo_set_pow2& other):
       illegalkey(other.illegalkey),
       numel(0), maxstash(other.maxstash),
       data(NULL), datalen(0),
@@ -378,7 +378,7 @@ namespace graphlab {
       data = NULL;
       (*this) = other;
     }
- 
+
 
     const key_type& illegal_key() const {
       return illegalkey;
@@ -413,7 +413,7 @@ namespace graphlab {
       }
       return *this;
     }
-  
+
     index_type size() const {
       return numel;
     }
@@ -538,7 +538,7 @@ namespace graphlab {
       return val + 1;
     }
 
-  
+
     void reserve(size_t newlen) {
       newlen = next_powerof2(newlen);
       if (newlen <= datalen) return;
@@ -592,11 +592,11 @@ namespace graphlab {
       return 0;
     }
 
-  
+
     void erase(iterator iter) {
       if (iter.in_stash == false) {
         if (!keyeq(*(iter.vec_iter), illegalkey)) {
-        
+
           replace_in_vector(&(*(iter.vec_iter)), illegalkey);
 
           --numel;
@@ -626,7 +626,7 @@ namespace graphlab {
       std::swap(keyeq, other.keyeq);
       std::swap(mask, other.mask);
     }
-  
+
     key_equal key_eq() const {
       return keyeq;
     }
@@ -640,7 +640,7 @@ namespace graphlab {
     float load_factor() const {
       return (float)numel / (datalen + stash.size());
     }
-  
+
   }; // end of cuckoo_set_pow2
 
 }; // end of graphlab namespace

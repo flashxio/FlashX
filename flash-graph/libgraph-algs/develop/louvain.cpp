@@ -58,11 +58,8 @@ namespace {
 
 			public:
 				atomicwrapper() :_a() {}
-
 				atomicwrapper(const std::atomic<T> &a) :_a(a.load()) {}
-
 				atomicwrapper(const atomicwrapper &other) :_a(other._a.load()) {}
-
 				atomicwrapper &operator=(const atomicwrapper &other) {
 					_a.store(other._a.load());
 					return *this;
@@ -89,7 +86,8 @@ namespace {
 		static void print_atomicwrapper_v(std::vector<atomicwrapper<T>>& v ) {
 
 			std::cout << "[ ";
-			for (typename std::vector<atomicwrapper<T>>::iterator it = v.begin(); it != v.end(); ++it)  {
+			for (typename std::vector<atomicwrapper<T>>::iterator it =
+                    v.begin(); it != v.end(); ++it)  {
 				std::cout << it->get() << " ";
 			}
 			std::cout << "]\n";
@@ -149,7 +147,7 @@ namespace {
 				if (cluster_id != next_cluster_id)
 					switch_clusters();
 				else
-					BOOST_LOG_TRIVIAL(info) << "ignoring ...";
+					std::cout << "ignoring ...\n";
 				update_globals = false;
 			} else {
 				vertex_id_t id = prog.get_vertex_id(*this);
@@ -160,8 +158,10 @@ namespace {
 		void run(vertex_program &prog, const page_vertex &vertex);
 		void run_on_message(vertex_program &prog, const vertex_message &msg1);
 
-		void compute_modularity(cluster_id_t neigh_cluster_id, vertex_id_t my_id, vertex_program& prog);
-		void compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
+		void compute_modularity(cluster_id_t neigh_cluster_id,
+                vertex_id_t my_id, vertex_program& prog);
+		void compute_per_vertex_vol_weight(data_seq_iterator& weight_it,
+                edge_seq_iterator& id_it,
 				vertex_program &prog);
 		void compute_per_cluster_vol_weight(vertex_program &prog);
 
@@ -172,8 +172,8 @@ namespace {
 
 		// Remove vertex from old cluster
 		void switch_clusters () {
-			BOOST_LOG_TRIVIAL(info) << " Switching! Moving from c" <<
-                cluster_id << " to c" << next_cluster_id;
+			std::cout << " Switching! Moving from c" <<
+                cluster_id << " to c" << next_cluster_id << std::endl;
 			g_weight_vec[cluster_id].minus_eq(weight);
 			g_volume_vec[cluster_id].minus_eq(volume);
 
@@ -299,13 +299,14 @@ namespace {
 		if (delta_mod > this->max_modularity) {
 #if 1
 			/** DEBUG **/
-			BOOST_LOG_TRIVIAL(info) << "v" << my_id << " tentative move from c" <<  cluster_id << " to c"
-				<< neigh_cluster_id << ", delta_mod="<< delta_mod << " > max_mod=" << max_modularity << "\n";
+			std::cout << "v" << my_id << " tentative move from c" <<
+                cluster_id << " to c" << neigh_cluster_id << ", delta_mod=" <<
+                delta_mod << " > max_mod=" << max_modularity << "\n";
 			/** GUBED **/
 #endif
 			max_modularity = delta_mod;
 			this->next_cluster_id = neigh_cluster_id;
-			//BOOST_LOG_TRIVIAL(info) << "Activating v" << my_id << " for the switch iteration";
+			//std::cout << "Activating v" << my_id << " for the switch iteration";
 			set_changed(true); // Global notification of cluster change
 
 			//prog.request_notify_iter_end(*this);
@@ -357,8 +358,10 @@ namespace fg
 				fg->get_graph_header());
 		graph_engine::ptr graph = fg->create_engine(index);
 
-		BOOST_LOG_TRIVIAL(info) << "Starting Louvain with " << levels << " levels";
-		BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file().c_str();
+		std::cout << "Starting Louvain with " << levels <<
+            " levels" << std::endl;
+		std::cout << "prof_file: " << graph_conf.get_prof_file().c_str()
+             << std::endl;
 #ifdef PROFILER
 		if (!graph_conf.get_prof_file().empty())
 			ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -367,7 +370,7 @@ namespace fg
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		// Resize weight and volume vectors
-		BOOST_LOG_TRIVIAL(info) << "Resizing vectors to " << graph->get_num_vertices() << "\n";
+		std::cout << "Resizing vectors to " << graph->get_num_vertices() << "\n";
 		g_weight_vec.resize(graph->get_num_vertices(), atomicwrapper<uint32_t>(0));
 		g_volume_vec.resize(graph->get_num_vertices(), atomicwrapper<uint32_t>(0));
 
@@ -379,19 +382,19 @@ namespace fg
 		// Aggregate the global edge-weight
 		std::vector<vertex_program::ptr> ec_progs;
 		graph->get_vertex_programs(ec_progs);
-		BOOST_FOREACH(vertex_program::ptr vprog, ec_progs) {
+		for (vertex_program::ptr vprog : ec_progs) {
 			init_vertex_program::ptr lvp = init_vertex_program::cast2(vprog);
 			g_edge_weight += lvp->get_local_ec();
 		}
-		BOOST_LOG_TRIVIAL(info) << "The graph's total edge weight is " << g_edge_weight << "\n";
+		std::cout << "The graph's total edge weight is " << g_edge_weight << "\n";
 
 		int iter = 0;
 		do {
 			set_changed(false);
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compute modularity ~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			louvain_stage = RUN;
-			BOOST_LOG_TRIVIAL(info) << "\n\n\x1B[31m****************** LEVEL ITERATION: " << iter++
-				<< " ********************************\x1B[0m\n\n";
+			std::cout << "\n\n\x1B[31m****************** LEVEL ITERATION: "
+                << iter++ << " ********************************\x1B[0m\n\n";
 
 			graph->start_all();
 			graph->wait4complete();
@@ -401,21 +404,21 @@ namespace fg
             std::vector<cluster_id_t> ret(graph->get_num_vertices());
 			graph->query_on_all(vertex_query::ptr(
                         new save_query<cluster_id_t, louvain_vertex>(ret)));
-			BOOST_LOG_TRIVIAL(info) << "Printing vertex clusters:";
+			std::cout << "Printing vertex clusters:";
 			/** GUBED **/
 #endif
 #if 1
 			/** DEBUG **/
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
-			BOOST_LOG_TRIVIAL(info) << "Global volume vector:";
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
+			std::cout << "Global volume vector:\n";
 			print_atomicwrapper_v(g_volume_vec);
 
-			BOOST_LOG_TRIVIAL(info) << "Global weight vector:";
+			std::cout << "Global weight vector:\n";
 			print_atomicwrapper_v(g_weight_vec);
-			BOOST_LOG_TRIVIAL(info) << "\x1B[31m===========================================\x1B[0m\n";
+			std::cout << "\x1B[31m===================================\x1B[0m\n";
 			/** GUBED **/
-			if (g_changed) BOOST_LOG_TRIVIAL(info) << "Loop continues!";
-			else BOOST_LOG_TRIVIAL(info) << "Loop ending!";
+			if (g_changed) std::cout << "Loop continues!\n";
+			else std::cout << "Loop ending!\n";
 
 			//if (iter > 2) { fprintf(stderr, "Premature kill"); exit(-1); }
 			/** GUBED **/
@@ -427,12 +430,12 @@ namespace fg
         std::vector<cluster_id_t> ret (graph->get_num_vertices());
 		graph->query_on_all(vertex_query::ptr(
                     new save_query<cluster_id_t, louvain_vertex>(ret)));
-		BOOST_LOG_TRIVIAL(info) << "\nVertex clusters @ end of Level1:";
+		std::cout << "\nVertex clusters @ end of Level1:\n";
 		/** GUBED **/
 #endif
 
 		louvain_stage = REBUILD; // TODO: Do something here
-		BOOST_LOG_TRIVIAL(info) << "\n Reached rebuild graph stage\n";
+		std::cout << "\n Reached rebuild graph stage\n";
 		gettimeofday(&end, NULL);
 
 #ifdef PROFILER
@@ -440,9 +443,7 @@ namespace fg
 			ProfilerStop();
 #endif
 
-		BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
-			% time_diff(start, end);
-
+		printf("It takes %.5f seconds\n", time_diff(start, end));
 		return;
 	}
 }

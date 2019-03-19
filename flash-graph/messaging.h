@@ -158,7 +158,7 @@ public:
 		assert(num_objs > 0);
 		assert(curr_add_off >= obj.get_serialized_size());
 		T *obj_p = (T *) &buf[curr_add_off - obj.get_serialized_size()];
-		BOOST_VERIFY(obj_p->get_serialized_size() == obj.get_serialized_size());
+		assert(obj_p->get_serialized_size() == obj.get_serialized_size());
 		num_objs--;
 		curr_add_off -= obj.get_serialized_size();
 	}
@@ -212,7 +212,7 @@ public:
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		BOOST_VERIFY(ret == thread_safe_FIFO_queue<message>::add(
+		assert(ret == thread_safe_FIFO_queue<message>::add(
 					msgs.data(), ret));
 		return num_objs;
 	}

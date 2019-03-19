@@ -1,5 +1,3 @@
-#include <boost/foreach.hpp>
-
 #include "graph_file_header.h"
 #include "vertex.h"
 #include "vertex_index.h"
