@@ -25,8 +25,8 @@
 
 #include <vector>
 #include <iterator>
-#include <boost/random.hpp>
-#include <boost/unordered_map.hpp>
+#include <random>
+#include <functional>
 #include <ctime>
 namespace graphlab {
 
@@ -36,13 +36,13 @@ namespace graphlab {
    * A cuckoo hash map which requires the user to
    * provide an "illegal" value thus avoiding the need
    * for a seperate bitmap. More or less similar
-   * interface as boost::unordered_map, not necessarily
+   * interface as unordered_map, not necessarily
    * entirely STL compliant.
    */
   template <typename Key,
             size_t CuckooK = 3,
             typename IndexType = size_t,
-            typename Hash = boost::hash<Key>,
+            typename Hash = std::hash<Key>,
             typename Pred = std::equal_to<Key> >
   class cuckoo_set_pow2 {
 
@@ -72,8 +72,10 @@ namespace graphlab {
     map_container_type data;
     size_t datalen;
     stash_container_type stash;
-    boost::rand48  drng;
-    boost::uniform_int<index_type> kranddist;
+    static const uint64_t m = std::pow(2,48);
+    std::linear_congruential_engine<uint64_t,0x5DEECE66D,0xB,m> drng;
+
+    std::uniform_int_distribution<index_type> kranddist;
     hasher hashfun;
     key_equal keyeq;
     index_type mask;
