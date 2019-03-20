@@ -174,6 +174,8 @@ public:
 
 }
 
+namespace fg {
+
 size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type traverse_e)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
@@ -213,3 +215,4 @@ size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type traverse_e)
 #endif
 	return num_visited;
 }
+} // End namespace fg

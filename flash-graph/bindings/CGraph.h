@@ -185,7 +185,6 @@ class CGraph {
                     start_vertex >= vcount())
                 start_vertex = random() % vcount() - 1;
 
-            size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type);
             return bfs(graph, start_vertex, edge);
         }
 

@@ -624,7 +624,6 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 		}
 	}
 
-	size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type);
 	size_t num_vertices = bfs(graph, start_vertex, edge);
 	printf("BFS from v%u traverses %ld vertices on edge type %d\n",
 			start_vertex, num_vertices, edge);
