@@ -276,8 +276,7 @@ void customized_vertex_queue::get_compute_vertex_pointers(
 	// Get vertically partitioned vertices.
 	for (int i = 0; i < graph_conf.get_num_vparts(); i++) {
 		off_t start = vertices.size() + i * vpart_ps.size();
-		off_t end = start + vpart_ps.size();
-		assert((size_t) end <= sorted_vertices.size());
+		assert(((size_t) start + vpart_ps.size()) <= sorted_vertices.size());
 		index.get_vpart_vertices(part_id, i, vpart_ps.data(), vpart_ps.size(),
 				sorted_vertices.data() + start);
 	}

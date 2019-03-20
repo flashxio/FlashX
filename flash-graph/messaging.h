@@ -157,8 +157,8 @@ public:
 	void remove_last_obj(T &obj) {
 		assert(num_objs > 0);
 		assert(curr_add_off >= obj.get_serialized_size());
-		T *obj_p = (T *) &buf[curr_add_off - obj.get_serialized_size()];
-		assert(obj_p->get_serialized_size() == obj.get_serialized_size());
+		assert(((T *) &buf[curr_add_off - obj.get_serialized_size()])
+                ->get_serialized_size() == obj.get_serialized_size());
 		num_objs--;
 		curr_add_off -= obj.get_serialized_size();
 	}

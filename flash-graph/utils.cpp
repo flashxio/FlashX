@@ -1346,6 +1346,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 		assert(edges.back().get_from() == vertices.back()->get_id());
 	}
 
+#ifdef NDEBUG
 	auto it = edges.cbegin();
 	for (size_t i = 0; i < vertices.size(); i++) {
 		ext_mem_undirected_vertex *v = vertices[i];
@@ -1358,6 +1359,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 				assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 		}
 	}
+#endif
 }
 
 template<class edge_data_type>
@@ -1402,6 +1404,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			}
 		}
 		else {
+#ifdef NDEBUG
 			// Check out-edges
 			ext_mem_undirected_vertex *v = vertices[i];
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
@@ -1412,6 +1415,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
+#endif
 		}
 	}
 }
@@ -1627,11 +1631,10 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 		}
 	};
 
-	size_t num_vertices = check_all_vertices(reader, idx, get_in_part_info_func(),
-			edge_g, true);
-	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
-			edge_g, false);
-	assert(num_vertices == num_vertices1);
+	size_t num_vertices = check_all_vertices(reader, idx,
+            get_in_part_info_func(), edge_g, true);
+	assert(num_vertices == check_all_vertices(reader, idx,
+            get_out_part_info_func(), edge_g, false));
 	printf("%lu vertices are checked\n", num_vertices);
 }
 
@@ -1652,10 +1655,9 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 	};
 	size_t num_vertices = check_all_vertices(reader, idx, get_in_part_info_func(),
 			edge_g, true);
-	size_t num_vertices1 = check_all_vertices(reader, idx,
+	assert(num_vertices == check_all_vertices(reader, idx,
             get_out_part_info_func(),
-			edge_g, false);
-	assert(num_vertices == num_vertices1);
+			edge_g, false));
 	printf("%lu vertices are checked\n", num_vertices);
 }
 

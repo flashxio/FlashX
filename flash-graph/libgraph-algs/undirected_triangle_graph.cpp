@@ -277,7 +277,7 @@ std::vector<size_t> compute_undirected_triangles(FG_graph::ptr fg)
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (directed) {
 		fprintf(stderr,
-                "This algorithm counts triangles in an undirected graph");
+                "This algorithm counts triangles in an undirected graph\n");
         return std::vector<size_t>();
 	}
 

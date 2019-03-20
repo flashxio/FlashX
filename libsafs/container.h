@@ -348,7 +348,12 @@ public:
 	// TODO I should return reference.
 	T pop_front() {
 		T entry;
-		assert(fetch(&entry, 1) == 1);
+        int ret = fetch(&entry, 1);
+
+        if (ret != 1) {
+            assert(ret == 1);
+        }
+
 		return entry;
 	}
 
