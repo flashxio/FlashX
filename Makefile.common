@@ -46,13 +46,13 @@ ifeq ($(USE_NUMA), 1)
 	CFLAGS += -DUSE_NUMA
 	CXXFLAGS += -DUSE_NUMA
 endif
-ifeq ($(USE_OPENBLAS), 1)
-	LDFLAGS += -lopenblas
-	CFLAGS += -DUSE_OPENBLAS
-	CXXFLAGS += -DUSE_OPENBLAS
-else
-	LDFLAGS += -lcblas
-endif
+#ifeq ($(USE_OPENBLAS), 1)
+	#LDFLAGS += -lopenblas
+	#CFLAGS += -DUSE_OPENBLAS
+	#CXXFLAGS += -DUSE_OPENBLAS
+#else
+	#LDFLAGS += -lcblas
+#endif
 
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -lrt -fopenmp

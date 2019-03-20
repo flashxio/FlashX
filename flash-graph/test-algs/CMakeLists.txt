@@ -1,7 +1,7 @@
 project (FlashGraph)
 
 add_executable(test_algs test_algs.cpp)
-target_link_libraries(test_algs graph-algs graph FMatrix safs cblas pthread)
+target_link_libraries(test_algs graph-algs graph FMatrix safs pthread)
 
 find_package(ZLIB)
 if (ZLIB_FOUND)

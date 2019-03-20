@@ -16,7 +16,7 @@ include ../../Makefile.common
 
 CXXFLAGS += -I../../libsafs -I..
 LDFLAGS := -L../ -lgraph -L../../libsafs -lsafs $(LDFLAGS)
-LDFLAGS += -lz -lcblas
+LDFLAGS += -lz
 
 all: el2fg fg2crs fg_lcc csr2fg
 
@@ -30,7 +30,8 @@ fg2crs: fg2crs.o ../libgraph.a
 	$(CXX) -o fg2crs fg2crs.o $(LDFLAGS)
 
 fg_lcc: fg_lcc.o ../libgraph.a
-	$(CXX) -o fg_lcc fg_lcc.o -L../../flash-graph/libgraph-algs -lgraph-algs $(LDFLAGS)
+	$(CXX) -o fg_lcc fg_lcc.o -L../../flash-graph/libgraph-algs \
+		-lgraph-algs $(LDFLAGS)
 
 clean:
 	rm -f *.d

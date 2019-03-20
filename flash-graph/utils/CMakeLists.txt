@@ -3,10 +3,10 @@ project (FlashGraph)
 include_directories("${PROJECT_SOURCE_DIR}")
 
 add_executable(el2fg el2fg.cpp)
-target_link_libraries(el2fg graph FMatrix safs pthread cblas)
+target_link_libraries(el2fg graph FMatrix safs pthread)
 
 add_executable(fg2fm fg2fm.cpp)
-target_link_libraries(fg2fm graph FMatrix safs pthread cblas)
+target_link_libraries(fg2fm graph FMatrix safs pthread)
 
 if (LIBNUMA_FOUND)
     target_link_libraries(el2fg numa)
