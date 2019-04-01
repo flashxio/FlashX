@@ -571,15 +571,19 @@ void run_diversity(FG_graph::ptr graph, int argc, char* argv[])
 {
 	int opt;
 	int num_opts = 0;
-    edge_type edge = edge_type::BOTH_EDGES;
+    edge_type edge = edge_type::OUT_EDGE;
+    bool memopt = false;
 	std::string edge_type_str = "";
 
-	while ((opt = getopt(argc, argv, "e:")) != -1) {
+	while ((opt = getopt(argc, argv, "e:m")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'e':
 				edge_type_str = optarg;
 				num_opts++;
+				break;
+			case 'm':
+				memopt = false;
 				break;
 			default:
 				print_usage();
@@ -588,7 +592,12 @@ void run_diversity(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
     edge = edge_str2edge(edge_type_str);
-	compute_diversity(graph, edge);
+    if (edge == edge_type::BOTH_EDGES) {
+        printf("Only IN and OUT edges usable\n");
+        exit(-1);
+    }
+
+	compute_diversity(graph, edge, memopt);
 }
 
 int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
@@ -785,7 +794,7 @@ void print_usage()
 	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "diversity\n");
-	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT, BOTH)\n");
+	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
