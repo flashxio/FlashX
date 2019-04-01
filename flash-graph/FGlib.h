@@ -376,5 +376,16 @@ void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
   */
 size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex,
         edge_type type=BOTH_EDGES);
+
+/**
+  * \brief Compute the closeness centrality of a graph.
+  *
+  * \param fg The FlashGraph graph object for which you want to compute.
+  * \param vids The vertex IDs for which closeness should be computed
+  * \return A vector with an entry for each vertex in the graph's
+  *         closeness centrality value.
+*/
+std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
+        std::vector<vsize_t>& ids, edge_type traverse_e=BOTH_EDGES);
 }
 #endif

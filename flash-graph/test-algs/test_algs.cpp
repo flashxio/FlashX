@@ -513,6 +513,55 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 //		btwn_v->to_file(write_out);
 }
 
+void run_closeness_centrality(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+	vertex_id_t id = INVALID_VERTEX_ID;
+    edge_type edge = edge_type::BOTH_EDGES;
+	std::string edge_type_str = "";
+
+	while ((opt = getopt(argc, argv, "s:e:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 's':
+				id = atol(optarg);
+				break;
+			case 'e':
+				edge_type_str = optarg;
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	if (!edge_type_str.empty()) {
+		if (edge_type_str == "IN")
+			edge = edge_type::IN_EDGE;
+		else if (edge_type_str == "OUT")
+			edge = edge_type::OUT_EDGE;
+		else if (edge_type_str == "BOTH")
+			edge = edge_type::BOTH_EDGES;
+		else {
+			fprintf(stderr, "wrong edge type");
+			exit(1);
+		}
+	}
+
+	std::vector<vertex_id_t> ids;
+
+	if (id == INVALID_VERTEX_ID)
+		for (vertex_id_t id = 0;
+                id < graph->get_graph_header().get_num_vertices(); id++)
+			ids.push_back(id);
+	else
+		ids.push_back(id);
+
+	auto closeness_v = compute_closeness_centrality(graph, ids, edge);
+}
+
 int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
 {
 	FILE *f = fopen(file.c_str(), "r");
@@ -666,6 +715,7 @@ std::string supported_algs[] = {
 	"ts_wcc",
 	"kcore",
 	"betweenness",
+	"closeness",
 	"overlap",
 	"bfs",
 	"louvain",
@@ -709,8 +759,11 @@ void print_usage()
 	fprintf(stderr, "-d dskip: disable skipping optimizatin\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "betweenness\n");
-	fprintf(stderr, "-w output: the file name for a vector written to file\n");
-	fprintf(stderr, "-s vertex id: the vertex where BC starts. (Default runs all)\n");
+	fprintf(stderr, "-s vertex id: Start vertex ID. (Default runs all)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "closeness\n");
+	fprintf(stderr, "-s vertex id: Start vertex ID. (Default runs all)\n");
+	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
@@ -816,6 +869,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "bfs") {
 		run_bfs(graph, argc, argv);
+	}
+	else if (alg == "closeness") {
+        run_closeness_centrality(graph, argc, argv);
 	}
 #if 0
 	else if (alg == "louvain") {
