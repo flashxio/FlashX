@@ -40,6 +40,22 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+
+static edge_type edge_str2edge(std::string& edge_type_str) {
+
+    if (!edge_type_str.empty()) {
+        if (edge_type_str == "IN")
+            return edge_type::IN_EDGE;
+        else if (edge_type_str == "OUT")
+            return edge_type::OUT_EDGE;
+        else if (edge_type_str == "BOTH")
+            return edge_type::BOTH_EDGES;
+    }
+
+    fprintf(stderr, "wrong edge type");
+    exit(1);
+}
+
 template<class T>
 std::pair<T, off_t> max_val_loc(std::vector<T>& res)
 {
@@ -537,18 +553,7 @@ void run_closeness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 		}
 	}
 
-	if (!edge_type_str.empty()) {
-		if (edge_type_str == "IN")
-			edge = edge_type::IN_EDGE;
-		else if (edge_type_str == "OUT")
-			edge = edge_type::OUT_EDGE;
-		else if (edge_type_str == "BOTH")
-			edge = edge_type::BOTH_EDGES;
-		else {
-			fprintf(stderr, "wrong edge type");
-			exit(1);
-		}
-	}
+    edge = edge_str2edge(edge_type_str);
 
 	std::vector<vertex_id_t> ids;
 
@@ -560,6 +565,30 @@ void run_closeness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 		ids.push_back(id);
 
 	auto closeness_v = compute_closeness_centrality(graph, ids, edge);
+}
+
+void run_diversity(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+    edge_type edge = edge_type::BOTH_EDGES;
+	std::string edge_type_str = "";
+
+	while ((opt = getopt(argc, argv, "e:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'e':
+				edge_type_str = optarg;
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+    edge = edge_str2edge(edge_type_str);
+	compute_diversity(graph, edge);
 }
 
 int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
@@ -660,18 +689,8 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 				abort();
 		}
 	}
-	if (!edge_type_str.empty()) {
-		if (edge_type_str == "IN")
-			edge = edge_type::IN_EDGE;
-		else if (edge_type_str == "OUT")
-			edge = edge_type::OUT_EDGE;
-		else if (edge_type_str == "BOTH")
-			edge = edge_type::BOTH_EDGES;
-		else {
-			fprintf(stderr, "wrong edge type");
-			exit(1);
-		}
-	}
+
+    edge = edge_str2edge(edge_type_str);
 
 	size_t num_vertices = bfs(graph, start_vertex, edge);
 	printf("BFS from v%u traverses %ld vertices on edge type %d\n",
@@ -763,6 +782,9 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "closeness\n");
 	fprintf(stderr, "-s vertex id: Start vertex ID. (Default runs all)\n");
+	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT, BOTH)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "diversity\n");
 	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
@@ -872,6 +894,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "closeness") {
         run_closeness_centrality(graph, argc, argv);
+	}
+	else if (alg == "diversity") {
+        run_diversity(graph, argc, argv);
 	}
 #if 0
 	else if (alg == "louvain") {

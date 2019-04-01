@@ -336,8 +336,10 @@ void louvain_vertex::compute_modularity(cluster_id_t neigh_cluster_id, vertex_id
 }
 
 // Only need to do this once per vertex ever
-void louvain_vertex::compute_per_vertex_vol_weight(data_seq_iterator& weight_it, edge_seq_iterator& id_it,
-		vertex_program &prog) {
+void louvain_vertex::compute_per_vertex_vol_weight(
+        data_seq_iterator& weight_it, edge_seq_iterator& id_it,
+        vertex_program &prog) {
+
 	edge_count local_edge_weight = 0;
 	uint32_t self_edge_weight = 0;
 

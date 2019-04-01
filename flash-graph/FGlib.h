@@ -387,5 +387,8 @@ size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex,
 */
 std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
         std::vector<vsize_t>& ids, edge_type traverse_e=BOTH_EDGES);
+
+std::vector<float> compute_diversity(FG_graph::ptr fg, edge_type traverse_e);
+
 }
 #endif

@@ -60,8 +60,7 @@ class closeness_vertex: public compute_directed_vertex
             const page_vertex &vertex);
 };
 
-// If I am to be deleted, multicast this message to all my neighbors
-// and activate them
+// An activateion message for neighbors
 class dist_message: public vertex_message
 {
     public:
@@ -201,7 +200,7 @@ std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	if (ids.size() == 0)
-        for (vertex_id_t vid = 0; vid < graph->get_max_vertex_id(); vid++)
+        for (vertex_id_t vid = 0; vid < fg->get_num_vertices(); vid++)
             ids.push_back(vid);
 
 	struct timeval start, end;
