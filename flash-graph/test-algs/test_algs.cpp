@@ -600,6 +600,11 @@ void run_diversity(FG_graph::ptr graph, int argc, char* argv[])
 	compute_diversity(graph, edge, memopt);
 }
 
+void run_topo_sort(FG_graph::ptr graph, int argc, char* argv[])
+{
+	auto ret = compute_topo_sort(graph);
+}
+
 int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
 {
 	FILE *f = fopen(file.c_str(), "r");
@@ -796,6 +801,8 @@ void print_usage()
 	fprintf(stderr, "diversity\n");
 	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT)\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "toposort\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
 	fprintf(stderr, "\n");
@@ -906,6 +913,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "diversity") {
         run_diversity(graph, argc, argv);
+	}
+	else if (alg == "topo_sort") {
+        run_topo_sort(graph, argc, argv);
 	}
 #if 0
 	else if (alg == "louvain") {

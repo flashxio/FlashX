@@ -402,5 +402,13 @@ std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
 */
 std::vector<float> compute_diversity(FG_graph::ptr fg,
         edge_type traverse_e=OUT_EDGE, bool memopt=false);
+
+/**
+  * \brief Compute one (of possibly many) topological sortings of the graph.
+  *
+  * \return A vector with a topological sorting of the vertices.
+*/
+std::vector<vsize_t> compute_topo_sort(FG_graph::ptr fg);
+
 }
 #endif
