@@ -602,7 +602,24 @@ void run_diversity(FG_graph::ptr graph, int argc, char* argv[])
 
 void run_topo_sort(FG_graph::ptr graph, int argc, char* argv[])
 {
-	auto ret = compute_topo_sort(graph);
+	int opt;
+	int num_opts = 0;
+    bool exact = false;
+	std::string edge_type_str = "";
+
+	while ((opt = getopt(argc, argv, "e")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'e':
+				exact = true;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	auto ret = compute_topo_sort(graph, !exact);
 }
 
 int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
@@ -802,6 +819,7 @@ void print_usage()
 	fprintf(stderr, "-e edge type: type of edge to traverse (IN, OUT)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "toposort\n");
+	fprintf(stderr, "-e: run the exact (not approx) algorithm\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
@@ -914,7 +932,7 @@ int main(int argc, char *argv[])
 	else if (alg == "diversity") {
         run_diversity(graph, argc, argv);
 	}
-	else if (alg == "topo_sort") {
+	else if (alg == "toposort") {
         run_topo_sort(graph, argc, argv);
 	}
 #if 0

@@ -408,7 +408,7 @@ std::vector<float> compute_diversity(FG_graph::ptr fg,
   *
   * \return A vector with a topological sorting of the vertices.
 */
-std::vector<vsize_t> compute_topo_sort(FG_graph::ptr fg);
+std::vector<vertex_id_t> compute_topo_sort(FG_graph::ptr fg, bool approx=true);
 
 }
 #endif
