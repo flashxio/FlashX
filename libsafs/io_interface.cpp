@@ -150,7 +150,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	std::set<int> disk_node_set = raid_conf->get_node_ids();
 	std::vector<int> disk_node_ids(disk_node_set.begin(), disk_node_set.end());
-	fprintf(stderr, "There are %lu nodes with disks", disk_node_ids.size());
+	printf("There are %lu nodes with disks\n", disk_node_ids.size());
 	init_aio(disk_node_ids);
 
 	file_mapper::ptr mapper = raid_conf->create_file_mapper();
