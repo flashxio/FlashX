@@ -24,6 +24,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <mutex>
 
 #ifdef _OPENMP
 #include <parallel/algorithm>
@@ -98,15 +99,30 @@ namespace monya {
     class IndexVector {
         private:
             std::vector<T> _;
+            std::vector<std::mutex*> locks;
+            std::vector<size_t> ranges;
+            IndexType max_part_id;
             bool sorted;
+
+            void add_lock() {
+                locks.push_back(new std::mutex());
+            }
 
         public:
             typedef typename std::vector<T>::iterator iterator;
 
             IndexVector() : sorted(false) { } // Default ctor
 
-            IndexVector(const size_t nelem) : IndexVector() {
-                resize(nelem);
+            std::vector<size_t>& get_ranges() {
+                return ranges;
+            }
+
+            void lock(const size_t part_num) {
+                locks[part_num]->lock();
+            }
+
+            void unlock(const size_t part_num) {
+                locks[part_num]->unlock();
             }
 
             IndexVector(const std::vector<IndexType>& v) : IndexVector() {
@@ -114,9 +130,24 @@ namespace monya {
                     _.push_back(T(idx, 0)); // 0 is a place holder
             }
 
-            void swap(IndexType arg0, IndexType arg1) {
-                // FIXME
-                std::swap(_[arg0], _[arg1]);
+            void swap(IndexType arg0, IndexType arg1, size_t start_idx,
+                    size_t end_offset) {
+
+                // FIXME This is the simple case when we do linear search
+                bool found0, found1;
+                size_t pos0, pos1;
+                found0 = found1 = false;
+                for (size_t idx = start_idx; idx < start_idx+end_offset;
+                        idx++) {
+                    if (!found0 && _[idx].get_index() == arg0) {
+                        pos0 = idx; found0 = true;
+                    } else if (!found1 && _[idx].get_index() == arg1) {
+                        pos1 = idx; found1 = true;
+                    }
+                    if (found0 && found1) break;
+                }
+                assert(found0 && found1);
+                std::swap(_[pos0], _[pos1]);
             }
 
             void resize(const size_t nelem) {
@@ -127,10 +158,14 @@ namespace monya {
                 return this->_[index];
             }
 
-            void print() {
+            void print(const size_t max_psize=100) {
+                auto psize = _.size() < max_psize ? _.size() : max_psize;
+
                 printf("[ ");
-                for (size_t i = 0; i < _.size(); i++)
+                for (size_t i = 0; i < psize; i++)
                     _[i].print();
+                if (max_psize == psize && _.size() != max_psize)
+                    printf("... ");
                 printf("]\n");
             }
 
@@ -184,7 +219,6 @@ namespace monya {
             iterator rbegin() { return _.rbegin(); }
             iterator rend() { return _.rend(); }
 
-            // FIXME the compare should be on Index only
             T* find(T& iv) {
                 if (!is_sorted())
                     sort();
@@ -202,13 +236,6 @@ namespace monya {
                     return (arg1.get_index() < arg2.get_index());
                 }
             };
-
-            // FIXME: Doesn't work
-            T* find_index(IndexType& idx, T* _start, T* _end) {
-                T iv(idx, 0); // Value doesn't matter
-                return std::binary_search(_start, _end,
-                        iv, IndexComp());
-            }
 
             void sort() {
 #ifdef _OPENMP
@@ -231,6 +258,46 @@ namespace monya {
             void clear() {
                 sorted = false;
                 _.clear();
+            }
+
+            const size_t locks_size() {
+                return locks.size();
+            }
+
+            // Obtain the partition mapping
+            void partition(std::vector<IndexType>& part_idx) {
+                if (_.size()) {
+                    ranges.push_back(0);
+                    add_lock();
+                } else {
+                    return;
+                }
+
+                IndexType part = 0;
+
+                auto prev_val = _[0].get_val();
+                part_idx[_[0].get_index()] = part;
+
+                for (size_t i = 1; i < _.size(); i++) {
+                    if (_[i].get_val() != prev_val) {
+                        part++;
+
+                        ranges.push_back(i);
+                        add_lock();
+                        prev_val = _[i].get_val();
+                    }
+                    part_idx[_[i].get_index()] = part;
+                }
+                max_part_id = part;
+            }
+
+            const IndexType& get_max_part_id() {
+                return max_part_id;
+            }
+
+            ~IndexVector() {
+                for (auto& lock : locks)
+                    delete lock;
             }
     };
 } // End monya

@@ -25,7 +25,6 @@
 #include <vector>
 #include <set>
 #include <algorithm>
-#include <mutex>
 
 #include "graph_engine.h"
 #include "FGlib.h"
@@ -46,40 +45,6 @@ typedef monya::IndexVector<IndexVal<vertex_id_t, vsize_t>, vsize_t, vsize_t>
     TopoVector;
 TopoVector topo_v;
 std::vector<vsize_t> part_index;
-std::vector<size_t> part_ranges;
-size_t max_part_id;
-
-// This class contains a bunch of locks for each partition
-class TopoVectorLocks {
-public:
-    std::vector<std::mutex*> locks;
-    TopoVectorLocks() { }
-
-    void resize(const size_t nlocks) {
-        for (size_t i = 0; i < nlocks; i++) {
-            locks.push_back(new std::mutex());
-        }
-    }
-
-    void lock(const size_t lock_num) {
-        locks[lock_num]->lock();
-    }
-
-    void unlock(const size_t lock_num) {
-        locks[lock_num]->unlock();
-    }
-
-    const size_t size() const {
-        return locks.size();
-    }
-
-    ~TopoVectorLocks() {
-        for (auto& lock : locks)
-            delete lock;
-    }
-};
-
-TopoVectorLocks topo_v_locks;
 
 class topo_vertex: public compute_vertex
 {
@@ -161,22 +126,20 @@ void topo_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 }
 
 // TODO: Test me for correctness
-void swap(TopoVector& tv, const size_t& part_id, TopoVectorLocks& locks,
-        std::vector<size_t> ranges,
+void swap(TopoVector& tv, const size_t& part_id,
         const vertex_id_t& id1, const vertex_id_t& id2) {
 
-    auto start_idx = ranges[part_id];
-    auto end_offset = part_id == max_part_id ? locks.size() : ranges[part_id+1];
-    vertex_id_t find_id1 = id1 < id2 ? id1 : id2;
-    vertex_id_t find_id2 = find_id1 == id1 ? id2 : id1;
+    auto start_idx = tv.get_ranges()[part_id];
+    auto end_offset = part_id == tv.get_max_part_id() ?
+                        tv.locks_size() : tv.get_ranges()[part_id+1];
 
-    locks.lock(part_id);
-    //auto find_it1 = tv.find_index(find_id1, tv.begin()+start_idx,
-            //tv.begin()+end_offset);
-    //auto find_it2 = tv.find_index(find_id2, find_it1, tv.begin()+end_offset);
-    //tv.swap(*find_it1, *find_it2);
-    tv.swap(0, 1);
-    locks.unlock(part_id);
+    //vertex_id_t find_id1 = id1 < id2 ? id1 : id2;
+    //vertex_id_t find_id2 = find_id1 == id1 ? id2 : id1;
+
+    tv.lock(part_id);
+    // This finds each and swaps them with a locked partition
+    tv.swap(id1, id2, start_idx, end_offset);
+    tv.unlock(part_id);
 }
 
 void topo_vertex::run_on_message(vertex_program &prog,
@@ -187,47 +150,26 @@ void topo_vertex::run_on_message(vertex_program &prog,
 
         if (msg.get_degree() == out_degree) {
 
+#if 0
             printf("Running vid: %u (%u), found vid: %u (%u) ...\n",
                     id, out_degree, msg.get_sender_id(), msg.get_degree());
+#endif
 
             if (msg.get_sender_id() > id && msg.get_sender_id() != id) {
                 auto part_id = part_index[id]; // What partition are you in
 
                 assert(part_id == part_index[msg.get_sender_id()]);
+#if 0
                 printf("\t ===> Swapping vid: %u with vid: %u in part: %u!\n",
                         id, msg.get_sender_id(), part_id);
-                swap(topo_v, part_id, topo_v_locks, part_ranges,
-                        id, msg.get_sender_id());
+#endif
+                swap(topo_v, part_id, id, msg.get_sender_id());
             }
         }
     }
 }
 
-// Obtain the partition mapping
-void partition_topo_v(TopoVector& v, std::vector<size_t>& ranges,
-        std::vector<vertex_id_t>& part_idx) {
-    if (v.size())
-        ranges.push_back(0);
-    else
-        return;
-
-    vsize_t part = 0;
-
-    auto prev_val = v[0].get_val();
-    part_idx[v[0].get_index()] = part;
-
-    for (size_t i = 1; i < v.size(); i++) {
-        if (v[i].get_val() != prev_val) {
-            part++;
-
-            ranges.push_back(i);
-            prev_val = v[i].get_val();
-        }
-        part_idx[v[i].get_index()] = part;
-    }
-    max_part_id = part;
-}
-
+#if 0
 // Helpers
 template <typename T>
 void p(std::vector<T>& v) {
@@ -236,6 +178,7 @@ void p(std::vector<T>& v) {
         std::cout << _ << " ";
     std::cout << "]\n";
 }
+#endif
 
 }
 
@@ -259,27 +202,33 @@ std::vector<vertex_id_t> compute_topo_sort(FG_graph::ptr fg, bool approx)
 	graph->wait4complete();
     topo_v.sort();
 
+#if 0
+    printf("\n\nApproximate sort:\n");
+    topo_v.print();
+#endif
+
     if (!approx) {
         part_index.resize(fg->get_num_vertices());
 
-        printf("\n\nPartitioning the topological vector ...\n");
-        partition_topo_v(topo_v, part_ranges, part_index);
+        printf("\nPartitioning the topological vector ...\n");
+        topo_v.partition(part_index);
 
-        printf("\n\nWe have %lu partitions ...\n", part_ranges.size());
-        topo_v_locks.resize(part_ranges.size());
+        printf("\nWe have %lu partitions ...\n", topo_v.get_ranges().size());
 #if 0
         printf("Partition ranges:\n");
-        p(part_ranges);
+        p(topo_v.get_ranges());
         printf("\nPartition index:\n");
         p(part_index);
         printf("\n");
         std::set<size_t> parts(part_index.begin(), part_index.end());
         std::cout << "parts.size() = " << parts.size() <<
-            ", part_ranges.size() = " << part_ranges.size() << std::endl;
-        assert(parts.size() == part_ranges.size());
+            ", topo_v.get_ranges.size() = " << topo_v.get_ranges().size()
+            << std::endl;
+        assert(parts.size() == topo_v.get_ranges().size());
 #endif
         printf("Running transmit degree stage ...\n");
         stage = TRANSMIT;
+        topo_v.set_sorted(false); // This stage immediately unsorts
         graph->start_all();
         graph->wait4complete();
     }
