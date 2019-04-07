@@ -728,12 +728,11 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 			start_vertex, num_vertices, edge);
 }
 
-#if 0
 void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 {
 	int opt;
 	int num_opts = 0;
-	uint32_t levels = 1;
+	unsigned levels = 1;
 
 	while ((opt = getopt(argc, argv, "l:")) != -1) {
 		num_opts++;
@@ -749,7 +748,6 @@ void run_louvain(FG_graph::ptr graph, int argc, char* argv[])
 
 	compute_louvain(graph, levels);
 }
-#endif
 
 std::string supported_algs[] = {
 	"cycle_triangle",
@@ -935,11 +933,9 @@ int main(int argc, char *argv[])
 	else if (alg == "toposort") {
         run_topo_sort(graph, argc, argv);
 	}
-#if 0
 	else if (alg == "louvain") {
 		run_louvain(graph, argc, argv);
 	}
-#endif
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
 	}

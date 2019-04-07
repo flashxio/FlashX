@@ -366,7 +366,7 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  * \param fg The FlashGraph graph object for which you want to compute.
  * \param levels The number of levels of the hierarchy to do.
  */
-void compute_louvain(FG_graph::ptr fg, const uint32_t levels);
+std::vector<unsigned> compute_louvain(FG_graph::ptr fg, const uint32_t levels);
 
 /**
   * \brief Run breadth first search and return the number of vertices visited.

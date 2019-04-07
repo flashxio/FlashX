@@ -29,6 +29,7 @@
 #include "graph_engine.h"
 #include "FGlib.h"
 #include "topological.hpp"
+#include "helper.hpp"
 
 using namespace fg;
 using namespace monya;
@@ -169,17 +170,6 @@ void topo_vertex::run_on_message(vertex_program &prog,
     }
 }
 
-#if 0
-// Helpers
-template <typename T>
-void p(std::vector<T>& v) {
-    std::cout << "[ ";
-    for (const auto& _ : v)
-        std::cout << _ << " ";
-    std::cout << "]\n";
-}
-#endif
-
 }
 
 namespace fg
@@ -214,11 +204,11 @@ std::vector<vertex_id_t> compute_topo_sort(FG_graph::ptr fg, bool approx)
         topo_v.partition(part_index);
 
         printf("\nWe have %lu partitions ...\n", topo_v.get_ranges().size());
-#if 0
+#if 1
         printf("Partition ranges:\n");
-        p(topo_v.get_ranges());
+        print(topo_v.get_ranges());
         printf("\nPartition index:\n");
-        p(part_index);
+        print(part_index);
         printf("\n");
         std::set<size_t> parts(part_index.begin(), part_index.end());
         std::cout << "parts.size() = " << parts.size() <<
