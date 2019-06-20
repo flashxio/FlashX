@@ -1,6 +1,5 @@
 /*
  * Copyright 2019
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,12 +31,15 @@ class CGraph {
         std::string index_file;
         config_map::ptr configs;
         FG_graph::ptr graph;
+        bool min_vertex_id_set;
+        vertex_id_t min_vertex_id;
 
     public:
         CGraph() { }
         CGraph(std::string graph_file, std::string index_file,
                 std::string config_file) : graph_file(graph_file),
-                index_file(index_file) {
+                index_file(index_file), min_vertex_id_set(false),
+                min_vertex_id(0) {
 
                     config_map::ptr configs = config_map::create(config_file);
                     if (configs == NULL)
@@ -186,6 +188,38 @@ class CGraph {
                 start_vertex = random() % vcount() - 1;
 
             return bfs(graph, start_vertex, edge);
+        }
+
+        std::string to_str() {
+			return std::string("Graphyti Graph:\n") +
+				std::string("v: ") + std::to_string(vcount()) +
+                std::string(", e: ") + std::to_string(ecount()) +
+                (is_directed() ? std::string("\nDirected"):
+                std::string("\nUndirected")) +
+                (is_in_mem() ? std::string("\nIn-memory\n"):
+                 std::string("\nOn-Disk\n"));
+        }
+
+        const vertex_id_t min_id() {
+            if (!min_vertex_id_set) {
+                class qvertex : public compute_vertex {
+                    public:
+                    qvertex(vertex_id_t id): compute_vertex(id) { }
+                    void run(vertex_program&) {}
+                    void run(vertex_program&, const page_vertex&) {}
+                    void run_on_message(vertex_program&, const vertex_message&) {}
+                };
+
+                graph_index::ptr index = NUMA_graph_index<qvertex>::create(
+                        graph->get_graph_header());
+                min_vertex_id = index->get_min_vertex_id();
+                min_vertex_id_set = true; // set it forever
+            }
+            return min_vertex_id;
+        }
+
+        const vertex_id_t max_id() {
+            return graph->get_num_vertices() - 1;
         }
 
         // TODO: tocsr
