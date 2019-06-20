@@ -22,12 +22,15 @@ CFLAGS = -g -O3 -I.. -I../libsafs $(TRACE_FLAGS)
 LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 LIBFILE = ../libsafs/libsafs.a
 
-TARGETS = SAFS-util
+TARGETS = SAFS-util test-fm
 
 all: $(TARGETS)
 
 SAFS-util: SAFS-util.o $(LIBFILE)
 	$(CXX) -o SAFS-util SAFS-util.o $(LDFLAGS)
+
+test-fm: test-fm.o $(LIBFILE)
+	$(CXX) -o test-fm test-fm.o $(LDFLAGS)
 
 clean:
 	rm -f *.o

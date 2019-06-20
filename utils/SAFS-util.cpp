@@ -17,11 +17,7 @@
  * limitations under the License.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <string>
+#include "SAFS-util.h"
 
 #include "io_interface.h"
 #include "native_file.h"
@@ -29,11 +25,7 @@
 #include "file_mapper.h"
 #include "RAID_config.h"
 
-using namespace safs;
-
-const int BUF_SIZE = 1024 * 64 * 4096;
-
-config_map::ptr configs;
+namespace fg { namespace utils {
 
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
@@ -51,108 +43,65 @@ ssize_t complete_read(int fd, char *buf, size_t count)
 	return bytes;
 }
 
-class data_source
-{
-public:
-	virtual ssize_t get_data(off_t off, size_t size, char *buf) const = 0;
-	virtual size_t get_size() const = 0;
-};
+file_data_source::file_data_source(const std::string &ext_file) {
+    fd = open(ext_file.c_str(), O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        exit(-1);
+    }
+    native_file f(ext_file);
+    file_size = f.get_size();
+}
 
-class file_data_source: public data_source
-{
-	int fd;
-	size_t file_size;
-public:
-	file_data_source(const std::string &ext_file) {
-		fd = open(ext_file.c_str(), O_RDONLY);
-		if (fd < 0) {
-			perror("open");
-			exit(-1);
-		}
-		native_file f(ext_file);
-		file_size = f.get_size();
-	}
+ssize_t file_data_source::get_data(off_t off, size_t size, char *buf) const {
+    long new_off = lseek(fd, off, SEEK_SET);
+    assert(new_off == off);
+    ssize_t ret = complete_read(fd, buf, size);
+    if (ret < 0) {
+        perror("complete_read");
+        exit(-1);
+    }
+    return ret;
+}
 
-	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
-		long new_off = lseek(fd, off, SEEK_SET);
-		assert(new_off == off);
-		ssize_t ret = complete_read(fd, buf, size);
-		if (ret < 0) {
-			perror("complete_read");
-			exit(-1);
-		}
-		return ret;
-	}
+ssize_t synthetic_data_source::get_data(off_t off, size_t size, char *buf) const {
+    off_t *long_pointer = (off_t *) buf;
+    int num_longs = size / sizeof(off_t);
+    long value = off / sizeof(off_t);
+    for (int i = 0; i < num_longs; i++, value++) {
+        long_pointer[i] = value;
+    }
+    return size;
+}
 
-	virtual size_t get_size() const {
-		return file_size;
-	}
-};
+verify_callback::verify_callback(data_source *source,
+        file_mapper::const_ptr fmapper) {
+    this->source = source;
+    this->fmapper = fmapper;
+    orig_buf = (char *) malloc(BUF_SIZE);
+    verified_bytes = 0;
+}
 
-class synthetic_data_source: public data_source
-{
-	size_t size;
-public:
-	synthetic_data_source(size_t size) {
-		this->size = size;
-	}
 
-	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
-		off_t *long_pointer = (off_t *) buf;
-		int num_longs = size / sizeof(off_t);
-		long value = off / sizeof(off_t);
-		for (int i = 0; i < num_longs; i++, value++) {
-			long_pointer[i] = value;
-		}
-		return size;
-	}
-
-	virtual size_t get_size() const {
-		return size;
-	}
-};
-
-class verify_callback: public callback
-{
-	char *orig_buf;
-	data_source *source;
-	size_t verified_bytes;
-	file_mapper::const_ptr fmapper;
-public:
-	verify_callback(data_source *source, file_mapper::const_ptr fmapper) {
-		this->source = source;
-		this->fmapper = fmapper;
-		orig_buf = (char *) malloc(BUF_SIZE);
-		verified_bytes = 0;
-	}
-
-	~verify_callback() {
-		free(orig_buf);
-	}
-
-	int invoke(io_request *rqs[], int num) {
-		size_t read_bytes = min<size_t>(rqs[0]->get_size(),
-				source->get_size() - rqs[0]->get_offset());
-		assert(read_bytes > 0);
-		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
-		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
-		assert(ret == read_bytes);
-		verified_bytes += read_bytes;
-		for (size_t i = 0; i < read_bytes; i++) {
-			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
-				struct block_identifier bid;
-				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
-                std::cerr << "bytes at " << (rqs[0]->get_offset() + i) <<
-                    "(in partition "<< bid.idx << ") doesn't match\n";
-			}
-		}
-		return 0;
-	}
-
-	size_t get_verified_bytes() const {
-		return verified_bytes;
-	}
-};
+int verify_callback::invoke(io_request *rqs[], int num) {
+    size_t read_bytes = min<size_t>(rqs[0]->get_size(),
+            source->get_size() - rqs[0]->get_offset());
+    assert(read_bytes > 0);
+    size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
+    fprintf(stderr, "verify block %lx of %ld bytes\n",
+            rqs[0]->get_offset(), read_bytes);
+    assert(ret == read_bytes);
+    verified_bytes += read_bytes;
+    for (size_t i = 0; i < read_bytes; i++) {
+        if (rqs[0]->get_buf()[i] != orig_buf[i]) {
+            struct block_identifier bid;
+            fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
+            std::cerr << "bytes at " << (rqs[0]->get_offset() + i) <<
+                "(in partition "<< bid.idx << ") doesn't match\n";
+        }
+    }
+    return 0;
+}
 
 void comm_verify_file(int argc, char *argv[])
 {
@@ -337,8 +286,6 @@ void comm_create_file(int argc, char *argv[])
 	io->cleanup();
 }
 
-void print_help();
-
 void comm_help(int argc, char *argv[])
 {
 	print_help();
@@ -485,15 +432,6 @@ void comm_rename(int argc, char *argv[])
 				new_name.c_str());
 }
 
-typedef void (*command_func_t)(int argc, char *argv[]);
-
-struct command
-{
-	std::string name;
-	command_func_t func;
-	std::string help_info;
-};
-
 struct command commands[] = {
 	{"create", comm_create_file,
 		"create file_name size: create a file with the specified size"},
@@ -515,6 +453,7 @@ struct command commands[] = {
 	{"rename", comm_rename,
 		"rename file_name new_name: rename an SAFS file"},
 };
+
 
 int get_num_commands()
 {
@@ -541,6 +480,8 @@ void print_help()
 	}
 }
 
+} } // End namespace fg::utils
+
 /**
  * This is a utility tool for the SA-FS.
  */
@@ -548,18 +489,18 @@ void print_help()
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
-		print_help();
+        fg::utils::print_help();
 		exit(-1);
 	}
 
 	std::string conf_file = argv[1];
 	std::string command = argv[2];
 
-	configs = config_map::create(conf_file);
-	const struct command *comm = get_command(command);
+    fg::utils::configs = config_map::create(conf_file);
+	const struct fg::utils::command *comm = fg::utils::get_command(command);
 	if (comm == NULL) {
 		fprintf(stderr, "wrong command %s\n", command.c_str());
-		print_help();
+        fg::utils::print_help();
 		return -1;
 	}
 	comm->func(argc - 3, argv + 3);
