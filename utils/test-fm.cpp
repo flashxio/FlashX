@@ -33,7 +33,12 @@ int main() {
 
     // Check size
     auto filesize = fm.file_size(fn);
-    printf("\n\nINFO:%s\n", fm.info(fn).c_str());
+    printf("\n\nINFO:\n");
+    for (auto& kv : fm.info(fn))
+        std::cout << kv.first.c_str() << " : " <<   kv.second.c_str() << "\n";
+
+    printf("\n");
+
     assert(filesize > 0);
     assert(fm.file_exists(fn));
 

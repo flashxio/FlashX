@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unordered_map>
 
 #include "io_interface.h"
 #include "native_file.h"
@@ -42,10 +43,10 @@ class FileManager {
     FileManager(const std::string& configuration_file):
         configuration_file(configuration_file) {
         configs = config_map::create(configuration_file);
-        init_io_system(configs, false);
     }
 
     void delete_file(const std::string& file_name) {
+        init_io_system(configs, false);
         configs->add_options("writable=1");
 
         safs_file file(get_sys_RAID_conf(), file_name);
@@ -55,10 +56,11 @@ class FileManager {
                     file_name + std::string(" doesn't exist\n"));
 
         file.delete_file();
+        destroy_io_system();
     }
 
     void from_ex_mem(const std::string& file_name, const std::string& ext_file) {
-
+        init_io_system(configs, false);
         FILE *f = fopen(ext_file.c_str(), "w");
         if (f == NULL) {
             fprintf(stderr, "can't open %s: %s\n", ext_file.c_str(),
@@ -102,22 +104,26 @@ class FileManager {
         }
 
         fclose(f);
+        destroy_io_system();
     }
 
     void to_ex_mem(const std::string& int_file_name,
             const std::string& ext_file) {
 
+        init_io_system(configs, false);
         safs_file file(get_sys_RAID_conf(), int_file_name);
         bool ret = file.load_data(ext_file);
 
         if (!ret)
             throw std::runtime_error(std::string("SAFS write fail with code") +
                     std::to_string(ret) + std::string("\n"));
+        destroy_io_system();
     }
 
     void rename(const std::string& file_name,
             const std::string& new_name) {
 
+        init_io_system(configs, false);
         safs_file file(get_sys_RAID_conf(), file_name);
         if (!file.exist()) {
             throw std::runtime_error(
@@ -128,9 +134,11 @@ class FileManager {
         if (!ret)
             throw std::runtime_error(std::string("Can't rename ") + file_name +
                     std::string(" to ") + new_name);
+        destroy_io_system();
     }
 
     std::vector<std::pair<std::string, size_t> > list_files() {
+        init_io_system(configs, false);
         std::set<std::string> files;
         std::vector<std::pair<std::string, size_t> > files_set;
 
@@ -157,35 +165,51 @@ class FileManager {
                             file.get_name(), 0));
             }
         }
+        destroy_io_system();
         return files_set;
     }
 
     const bool file_exists(const std::string& file_name) {
+        init_io_system(configs, false);
         safs_file file(get_sys_RAID_conf(), file_name);
+        auto ret = false;
+
         if (file.exist())
-            return true;
-        return false;
+            ret = true;
+
+        destroy_io_system();
+        return ret;
     }
 
     size_t file_size(const std::string& file_name) {
+        init_io_system(configs, false);
         file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
                 REMOTE_ACCESS);
         safs_header header = io_factory->get_header();
-        return header.get_size();
+
+        auto ret = header.get_size();
+        destroy_io_system();
+        return ret;
     }
 
-    std::string info(const std::string& file_name) {
+    std::unordered_map<std::string, std::string> info(
+            const std::string& file_name) {
+        init_io_system(configs, false);
         file_io_factory::shared_ptr io_factory = create_io_factory(file_name,
                 REMOTE_ACCESS);
         safs_header header = io_factory->get_header();
 
-        return std::string("File: ") + file_name +
-            std::string("\nRAID block size: ") +
-            std::to_string((header.get_block_size() * PAGE_SIZE)) +
-            std::string("\nRAID mapping option: ") +
-            std::to_string(header.get_mapping_option()) +
-            std::string("\nFile size: ") + std::to_string(header.get_size()) +
-            std::string("\n");
+        std::unordered_map<std::string, std::string> ret = {
+            {"File", file_name},
+            {"RAID block size",
+                std::to_string((header.get_block_size() * PAGE_SIZE))},
+            {"RAID mapping option",
+                std::to_string(header.get_mapping_option())},
+            {"File size", std::to_string(header.get_size())}
+        };
+
+        destroy_io_system();
+        return ret;
     }
 
     std::string to_str() {
