@@ -105,13 +105,7 @@ class FileManager {
     }
 
     void to_ex_mem(const std::string& int_file_name,
-            const std::string& ext_file,
-            size_t block_size=params.get_RAID_block_size()) {
-
-        if (block_size != (size_t) params.get_RAID_block_size()) {
-            // block_size is the number of pages.
-            block_size /= PAGE_SIZE;
-        }
+            const std::string& ext_file) {
 
         safs_file file(get_sys_RAID_conf(), int_file_name);
         bool ret = file.load_data(ext_file);
@@ -193,7 +187,11 @@ class FileManager {
             std::string("\nFile size: ") + std::to_string(header.get_size()) +
             std::string("\n");
     }
-};
 
+    std::string to_str() {
+        return std::string("FileManager\nConfig file: ") + configuration_file
+            + std::string("\n");
+    }
+};
 } // End namespace fg
 #endif

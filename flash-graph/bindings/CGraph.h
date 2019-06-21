@@ -197,7 +197,7 @@ class CGraph {
                 (is_directed() ? std::string("\nDirected"):
                 std::string("\nUndirected")) +
                 (is_in_mem() ? std::string("\nIn-memory\n"):
-                 std::string("\nOn-Disk\n"));
+                 std::string("\nOn-Disk"));
         }
 
         const vertex_id_t min_id() {
