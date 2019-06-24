@@ -43,119 +43,6 @@ void print_usage()
 }
 }
 
-namespace fg { namespace utils {
- void el2fg_(std::vector<std::string> edge_list_files,
-        std::string adjacency_list_file,
-        std::string index_file, bool directed,
-        int num_threads, char* type_str, bool merge_graph,
-        bool write_graph, bool on_disk,
-        size_t sort_buf_size, size_t write_buf_size,
-        std::string conf_file, std::string work_dir) {
-
-	utils::set_num_threads(num_threads);
-	if (sort_buf_size > 0)
-		utils::set_sort_buf_size(sort_buf_size);
-	if (write_buf_size > 0)
-		utils::set_write_buf_size(write_buf_size);
-
-	int edge_attr_type = utils::DEFAULT_TYPE;
-	if (type_str) {
-		edge_attr_type = conv_edge_type_str2int(type_str);
-	}
-
-	utils::large_io_creator::ptr creator;
-	if (conf_file.empty())
-		creator = utils::large_io_creator::create(false, work_dir);
-	else {
-		config_map::ptr configs = config_map::create(conf_file);
-		configs->add_options("writable=1");
-		safs::init_io_system(configs);
-		creator = utils::large_io_creator::create(true, ".");
-	}
-	if (merge_graph) {
-		utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
-				edge_attr_type, directed, !on_disk);
-		if (edge_g) {
-			utils::disk_serial_graph::ptr g
-				= std::static_pointer_cast<
-                utils::disk_serial_graph, utils::serial_graph>(
-						utils::construct_graph(edge_g, creator));
-			// Write the constructed individual graph to a file.
-			if (write_graph) {
-				assert(!file_exist(adjacency_list_file));
-				assert(!file_exist(index_file));
-				g->dump(index_file, adjacency_list_file, true);
-			}
-			printf("There are %ld vertices, %ld non-empty vertices"
-                    " and %ld edges\n",
-					g->get_num_vertices(), g->get_num_non_empty_vertices(),
-					g->get_num_edges());
-			if (fg::utils::check_graph) {
-				struct timeval start, end;
-				gettimeofday(&start, NULL);
-				g->check_ext_graph(*edge_g, index_file,
-						creator->create_reader(adjacency_list_file));
-				gettimeofday(&end, NULL);
-				printf("verifying a graph takes %.2f seconds\n",
-						time_diff(start, end));
-			}
-		}
-	}
-	else {
-		std::vector<std::string> graph_files;
-		std::vector<std::string> index_files;
-		if (edge_list_files.size() > 1) {
-			for (size_t i = 0; i < edge_list_files.size(); i++) {
-				graph_files.push_back(adjacency_list_file + "-" + itoa(i));
-				index_files.push_back(index_file + "-" + itoa(i));
-			}
-		}
-		else {
-			graph_files.push_back(adjacency_list_file);
-			index_files.push_back(index_file);
-		}
-
-		for (size_t i = 0; i < edge_list_files.size(); i++) {
-			// construct individual graphs.
-			std::vector<std::string> files(1);
-			files[0] = edge_list_files[i];
-
-			utils::edge_graph::ptr edge_g = utils::parse_edge_lists(files,
-					edge_attr_type, directed, !on_disk);
-			if (edge_g == NULL)
-				continue;
-			utils::disk_serial_graph::ptr g
-				= std::static_pointer_cast<
-                utils::disk_serial_graph, utils::serial_graph>(
-						utils::construct_graph(edge_g, creator));
-			// Write the constructed individual graph to a file.
-			if (write_graph) {
-				assert(!file_exist(graph_files[i]));
-				assert(!file_exist(index_files[i]));
-				g->dump(index_files[i], graph_files[i], true);
-			}
-			printf("There are %ld vertices, %ld non-empty "
-                    "vertices and %ld edges\n",
-					g->get_num_vertices(), g->get_num_non_empty_vertices(),
-					g->get_num_edges());
-			if (fg::utils::check_graph) {
-				struct timeval start, end;
-				gettimeofday(&start, NULL);
-				g->check_ext_graph(*edge_g, index_files[i],
-						creator->create_reader(graph_files[i]));
-				gettimeofday(&end, NULL);
-				printf("verifying a graph takes %.2f seconds\n",
-						time_diff(start, end));
-			}
-		}
-	}
-
-	if (is_safs_init())
-		destroy_io_system();
- }
-
-}} // End namespace fg::utils
-
 int main(int argc, char *argv[])
 {
 	int opt;
@@ -240,7 +127,7 @@ int main(int argc, char *argv[])
 			edge_list_files.push_back(argv[i]);
 	}
 
-    fg::utils::el2fg_(edge_list_files, adjacency_list_file, index_file, directed,
+    fg::utils::el2fg(edge_list_files, adjacency_list_file, index_file, directed,
             num_threads, type_str, merge_graph, write_graph, on_disk,
             sort_buf_size, write_buf_size, conf_file, work_dir);
 }
