@@ -62,7 +62,7 @@ static bool check_graph = false;
         char* type_str=NULL, bool merge_graph=false,
         bool write_graph=true, bool on_disk=false,
         size_t sort_buf_size=0, size_t write_buf_size=0,
-        std::string conf_file=0, std::string work_dir=".") {
+        std::string conf_file="", std::string work_dir=".") {
 
 	utils::set_num_threads(num_threads);
 	if (sort_buf_size > 0)
