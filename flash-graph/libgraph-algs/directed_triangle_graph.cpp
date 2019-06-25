@@ -394,9 +394,8 @@ std::vector<size_t> compute_directed_triangles(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-        std::cerr <<
-            "This algorithm counts triangles in a directed graph\n";
-        return std::vector<size_t>();
+        throw std::runtime_error(
+            "This algorithm counts triangles in a directed graph\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex>::create(

@@ -284,9 +284,8 @@ namespace fg
             const unsigned levels) {
 
         if (!fg->get_graph_header().is_directed_graph()) {
-            fprintf(stderr,
+            throw std::runtime_error(
                     "This algorithm works on a directed graph\n");
-            return std::vector<unsigned>();
         }
 
 		graph_index::ptr index = NUMA_graph_index<louvain_vertex>::create(

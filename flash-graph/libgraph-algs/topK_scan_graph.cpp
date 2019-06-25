@@ -661,9 +661,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-	    fprintf(stderr,
+        throw std::runtime_error(
 			"This algorithm current works on a directed graph\n");
-		return FG_vector<std::pair<vertex_id_t, size_t> >::ptr();
 	}
 
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,

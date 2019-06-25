@@ -396,8 +396,8 @@ std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-        std::cerr << "This algorithm currently works on a directed graph\n";
-        return std::vector<float>();
+        throw std::runtime_error(
+                "This algorithm currently works on a directed graph\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(

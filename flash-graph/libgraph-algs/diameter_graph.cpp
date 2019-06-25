@@ -350,9 +350,8 @@ namespace fg
 size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 {
 	if (!fg->get_graph_header().is_directed_graph()) {
-	    fprintf(stderr,
+        throw std::runtime_error(
 			"We can't estimate diameter on an undirected graph currently\n");
-		return 0;
 	}
 	num_bfs = num_para_bfs;
 	if (!directed)

@@ -202,14 +202,14 @@ std::vector<float> compute_pagerank(FG_graph::ptr fg, int num_iters,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		fprintf(stderr, "This algorithm works on a directed graph\n");
-        return std::vector<float>();
+        throw std::runtime_error(
+                "This algorithm works on a directed graph\n");
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
-        return std::vector<float>();
+        throw std::runtime_error(
+                "Damping factor must be between 0 and 1 inclusive\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(
@@ -252,15 +252,14 @@ std::vector<float> compute_pagerank2(FG_graph::ptr fg, int num_iters,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-        fprintf(stderr,
+        throw std::runtime_error(
                 "This algorithm works on a directed graph\n");
-        return std::vector<float>();
 	}
 
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-        fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
-        return std::vector<float>();
+        throw std::runtime_error(
+                "Damping factor must be between 0 and 1 inclusive\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(

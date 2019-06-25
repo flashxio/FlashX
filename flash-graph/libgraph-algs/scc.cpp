@@ -1114,8 +1114,8 @@ std::vector<vertex_id_t> compute_scc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-		fprintf(stderr, "This algorithm works on a directed graph\n");
-        return std::vector<vertex_id_t>();
+        throw std::runtime_error(
+                "This algorithm works on a directed graph\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(

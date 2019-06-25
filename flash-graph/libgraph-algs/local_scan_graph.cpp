@@ -351,8 +351,8 @@ std::vector<size_t> compute_local_scan(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-	    fprintf(stderr, "This algorithm current works on a directed graph\n");
-        return std::vector<size_t>();
+	    throw std::runtime_error(
+                "This algorithm current works on a directed graph\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(

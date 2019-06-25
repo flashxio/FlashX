@@ -189,8 +189,8 @@ std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
 {
 
 	if (!fg->get_graph_header().is_directed_graph()) {
-        std::cerr << "This algorithm currently works on a directed graph\n";
-        return std::vector<double>();
+        throw std::runtime_error(
+                "This algorithm currently works on a directed graph\n");
 	} else {
         g_edge_type = traverse_e;
     }

@@ -115,10 +115,8 @@ std::vector<float> compute_diversity(FG_graph::ptr fg, edge_type traverse_e,
     g_edge_type = traverse_e;
     g_memopt = memopt;
 
-    if (g_edge_type == BOTH_EDGES) {
-        fprintf(stderr, "Only IN and OUT edges usable\n");
-        return diversity_v;
-    }
+    if (g_edge_type == BOTH_EDGES)
+        throw std::runtime_error("Only IN and OUT edges usable\n");
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);

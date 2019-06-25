@@ -420,8 +420,8 @@ std::vector<vertex_id_t> compute_cc(FG_graph::ptr fg)
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 	if (graph->is_directed()) {
-		fprintf(stderr, "cc has to run on an undirected graph\n");
-        return std::vector<vertex_id_t>();
+        throw std::runtime_error(
+                "cc has to run on an undirected graph\n");
 	}
 
 	graph->start_all(vertex_initializer::ptr(),
@@ -458,8 +458,8 @@ std::vector<vertex_id_t> compute_wcc(FG_graph::ptr fg)
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 	if (!graph->is_directed()) {
-		fprintf(stderr, "wcc has to run on a directed graph\n");
-        return std::vector<vertex_id_t>();
+        throw std::runtime_error(
+                "wcc has to run on a directed graph\n");
 	}
 
 	struct timeval start, end;
@@ -485,8 +485,7 @@ std::vector<vertex_id_t> compute_sync_wcc(FG_graph::ptr fg)
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-	    fprintf(stderr, "This algorithm works on a directed graph\n");
-        return std::vector<vertex_id_t>();
+	    throw std::runtime_error("This algorithm works on a directed graph\n");
 	}
 
 	graph_index::ptr index = NUMA_graph_index<sync_wcc_vertex>::create(
@@ -498,8 +497,7 @@ std::vector<vertex_id_t> compute_sync_wcc(FG_graph::ptr fg)
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 	if (!graph->is_directed()) {
-		fprintf(stderr, "wcc has to run on a directed graph\n");
-        return std::vector<vertex_id_t>();
+		throw std::runtime_error("wcc has to run on a directed graph\n");
 	}
 
 	struct timeval start, end;
@@ -526,8 +524,7 @@ std::vector<vertex_id_t> compute_ts_wcc(FG_graph::ptr fg,
 {
 	bool directed = fg->get_graph_header().is_directed_graph();
 	if (!directed) {
-        fprintf(stderr, "This algorithm works on a directed graph\n");
-        return std::vector<vertex_id_t>();
+        throw std::runtime_error("This algorithm works on a directed graph\n");
     }
 
     graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
@@ -540,8 +537,7 @@ std::vector<vertex_id_t> compute_ts_wcc(FG_graph::ptr fg,
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 	if (!graph->is_directed()) {
-		fprintf(stderr, "wcc has to run on a directed graph\n");
-        return std::vector<vertex_id_t>();
+		throw std::runtime_error("wcc has to run on a directed graph\n");
 	}
 
 	struct timeval start, end;

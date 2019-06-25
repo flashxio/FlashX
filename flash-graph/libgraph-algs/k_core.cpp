@@ -293,9 +293,8 @@ std::vector<size_t> compute_kcore(FG_graph::ptr fg, size_t k, size_t kmax,
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	if (k > graph->get_max_vertex_id()) {
-	    fprintf(stderr,
+        throw std::runtime_error(
 			"'k' must be between 2 and the number of nodes in the graph");
-        return std::vector<size_t>();
 	}
 
 	struct timeval start, end;
