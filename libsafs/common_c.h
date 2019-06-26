@@ -30,6 +30,11 @@
 #include <execinfo.h>
 #include <unistd.h>
 
+#ifdef IGNORE_PRINTF
+#define printf(fmt, ...)
+#define fprintf(fmt, ...)
+#endif
+
 #define gettid() syscall(__NR_gettid)
 
 #define ROUND(off, base) (((long) off) & (~((long) (base) - 1)))
