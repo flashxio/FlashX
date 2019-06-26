@@ -2447,15 +2447,14 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 			return edge_graph::ptr();
 		}
 
-        std::cout << "start to read the edge list from " << file << std::endl;
+        printf("start to read the edge list from %s\n", file.c_str());
 		graph_file_io::ptr io;
 		if (is_compressed(file)) {
 #ifdef USE_GZIP
 			io = graph_file_io::ptr(new gz_graph_file_io(file));
 #else
-            std::cerr << "Doesn't support reading gz file\n";
-            std::cerr << "zlib is required to support reading gz file\n";
-			exit(1);
+            throw std::runtime_error("Doesn't support reading gz file "
+                    "zlib is required to support reading gz file\n");
 #endif
 		}
 		else

@@ -143,12 +143,14 @@ class atomicwrapper
 template <typename T>
 static void print_atomicwrapper_v(std::vector<atomicwrapper<T>>& v ) {
 
+#ifndef BIND
     std::cout << "[ ";
     for (typename std::vector<atomicwrapper<T>>::iterator it =
             v.begin(); it != v.end(); ++it)  {
         std::cout << it->get() << " ";
     }
     std::cout << "]\n";
+#endif
 }
 
 class bitmapvector {

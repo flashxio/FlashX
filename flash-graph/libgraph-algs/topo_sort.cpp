@@ -211,9 +211,8 @@ std::vector<vertex_id_t> compute_topo_sort(FG_graph::ptr fg, bool approx)
         print(part_index);
         printf("\n");
         std::set<size_t> parts(part_index.begin(), part_index.end());
-        std::cout << "parts.size() = " << parts.size() <<
-            ", topo_v.get_ranges.size() = " << topo_v.get_ranges().size()
-            << std::endl;
+        printf("parts.size() = %lu , topo_v.get_ranges.size() = %lu\n",
+                parts.size(), topo_v.get_ranges().size());
         assert(parts.size() == topo_v.get_ranges().size());
 #endif
         printf("Running transmit degree stage ...\n");

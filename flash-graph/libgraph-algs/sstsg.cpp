@@ -347,8 +347,8 @@ std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-    std::cout << "Scan statistics starts, start: " << timestamp << ", interval: "
-        << time_interval <<  ", #interval: " << num_time_intervals << std::endl;
+    printf("Scan statistics starts, start: %f, interval: %f, #interval: %d\n",
+            timestamp, time_interval, num_time_intervals);
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -364,7 +364,7 @@ std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	std::cout << "It takes " << time_diff(start, end) << "seconds\n";
+	printf("It takes %.4f seconds\n", time_diff(start, end));
 
     std::vector<float> res(fg->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(

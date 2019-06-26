@@ -235,10 +235,9 @@ public:
 
 	void finding_triangles_end(vertex_program &prog, size_t local_scan) {
 		vertex_id_t id = prog.get_vertex_id(*this);
-		if (max_scan.update(local_scan)) {
-            std::cout << "new max scan: " << local_scan << " at v" << id
-                << std::endl;
-		}
+		if (max_scan.update(local_scan))
+            printf("new max scan: %lu at v: %u\n", local_scan, id);
+
 		known_scans.add(id, local_scan);
 	}
 };
@@ -742,8 +741,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 			prev_start_loc++;
 		}
 		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
-        std::cout << "prev topK scan: " << prev_topK_scan
-            << ", prev loc: " << prev_start_loc << std::endl;
+        printf("prev topK scan: %lu , prev loc: %lu\n", prev_topK_scan,
+                prev_start_loc);
 
 		// Let's use the topK as the max scan for unknown vertices
 		// and see if we can find a new vertex that has larger local scan.
