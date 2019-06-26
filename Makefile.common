@@ -54,9 +54,11 @@ endif
 	#LDFLAGS += -lcblas
 #endif
 
+BINDFLAGS = -fwrapv -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2 -Wno-unused-function -DIGNORE_PRINTF
+
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS += -lpthread $(TRACE_FLAGS) -rdynamic -lrt -fopenmp
-CXXFLAGS += -mavx -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -fopenmp
+CXXFLAGS += -mavx -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -fopenmp $(BINDFLAGS)
 ifdef PROF
 	LDFLAGS +=-lprofiler
 	CXXFLAGS += -DPROFILER

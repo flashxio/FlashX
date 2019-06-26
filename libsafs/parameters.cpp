@@ -154,7 +154,7 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	else
 		num_nodes = cpus.get_num_nodes();
 #endif
-	std::cout << "SAFS runs on " << num_nodes << " NUMA nodes\n";
+	printf("SAFS runs on %d NUMA nodes\n", num_nodes);
 
 	it = configs.find("merge_reqs");
 	if (it != configs.end()) {

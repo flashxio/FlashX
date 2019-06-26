@@ -49,21 +49,20 @@ void graph_config::print_help()
 
 void graph_config::print()
 {
-	std::cout << "Configuration parameters in graph algorithm.\n";
-	std::cout << "\tthreads: " << num_threads << std::endl;
-	std::cout << "\tprof_file: " << prof_file << std::endl;
-	std::cout << "\ttrace_file: " << trace_file << std::endl;
-	std::cout << "\tmax_processing_vertices: " <<
-        max_processing_vertices << std::endl;
-	std::cout << "\tenable_elevator: " << enable_elevator << std::endl;
-	std::cout << "\tpart_range_size_log: " << part_range_size_log << std::endl;
-	std::cout << "\tpreload: " << _preload << std::endl;
-	std::cout << "\tindex_file_weight: " << index_file_weight << std::endl;
-	std::cout << "\tin_mem_graph: " << _in_mem_graph << std::endl;
-	std::cout << "\tnum_vparts: " << num_vparts << std::endl;
-	std::cout << "\tmin_vpart_degree: " << min_vpart_degree << std::endl;
-	std::cout << "\tserial_run: " << serial_run << std::endl;
-	std::cout << "\tvertex_merge_gap: " << vertex_merge_gap << std::endl;
+	printf("Configuration parameters in graph algorithm.\n");
+	printf("\tthreads: %d\n", num_threads);
+	printf("\tprof_file: %s\n", prof_file.c_str());
+	printf("\ttrace_file: %s\n", trace_file.c_str());
+	printf("\tmax_processing_vertices: %d\n", max_proceessing_vertices);
+    printf("\tenable_elevator: %d\n", (int)enable_elevator);
+	printf("\tpart_range_size_log: %d\n", part_range_size_log);
+	printf("\tpreload: %d\n", (int)_preload);
+	printf("\tindex_file_weight: %d\n", index_file_weight);
+	printf("\tin_mem_graph: %d\n", (int) _in_mem_graph);
+	printf("\tnum_vparts: %d\n", num_vparts);
+	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
+	printf("\tserial_run: %d\n", (int)serial_run);
+	printf("\tvertex_merge_gap: %d\n", vertex_merge_gap);
 }
 
 void graph_config::init(config_map::ptr map)
@@ -76,8 +75,8 @@ void graph_config::init(config_map::ptr map)
 		num_threads = 1 << (int) ceil(log2(num_threads));
 	}
 #endif
-	std::cout << "FlashGraph runs on " << num_threads << " threads and " <<
-        safs::params.get_num_nodes() <<" nodes\n";
+	printf("FlashGraph runs on %d threads and nodes\n", num_threads,
+        safs::params.get_num_nodes());
 	if (!power2(num_threads))
 		throw conf_exception("The number of worker threads has to be 2^n");
 	map->read_option("prof_file", prof_file);

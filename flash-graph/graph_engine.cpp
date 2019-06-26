@@ -612,8 +612,8 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 	init(index);
 
 	gettimeofday(&init_end, NULL);
-    std::cout << "It takes " << time_diff(init_start, init_end) <<
-        " seconds to initialize the graph engine\n";
+    printf("It takes %.4f seconds to initialize the graph engine\n",
+            time_diff(init_start, init_end));
 }
 
 graph_engine::~graph_engine()

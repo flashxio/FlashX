@@ -364,7 +364,7 @@ void in_mem_cundirected_vertex_index::verify_against(
 
 void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 {
-	BOOST_LOG_TRIVIAL(info) << "init from a regular vertex index";
+	printf("init from a regular vertex index");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
@@ -399,7 +399,7 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "init from a compressed vertex index";
+	printf("init from a compressed vertex index");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	num_vertices = index.get_graph_header().get_num_vertices();
