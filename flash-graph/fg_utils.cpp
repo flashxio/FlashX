@@ -182,20 +182,4 @@ struct block_info
 };
 
 }
-
-//static void print_vertex(const ext_mem_undirected_vertex &v, bool directed,
-		//const std::string &delim, const scalar_type *edge_data_type, FILE *f)
-//{
-	//for (size_t i = 0; i < v.get_num_edges(); i++) {
-		//// For undirected vertices, we only need to print the first half.
-		//if (!directed && v.get_neighbor(i) > v.get_id())
-			//break;
-		//std::string str = std::to_string(v.get_id()) + delim
-			//+ std::to_string(v.get_neighbor(i));
-		//if (v.has_edge_data() && edge_data_type)
-			//str = str + delim + edge_data_type->conv2str(
-					//v.get_raw_edge_data(i), 1, "");
-		//fprintf(f, "%s\n", str.c_str());
-	//}
-//}
 }

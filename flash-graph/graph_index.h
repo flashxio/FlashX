@@ -367,7 +367,6 @@ public:
 
 		min_vertex_id = 0;
 		max_vertex_id = header.get_num_vertices() - 1;
-
 		printf("There are %ld vertices\n", header.get_num_vertices());
 	}
 
@@ -488,55 +487,6 @@ public:
 		return get_vertex_id(part_id, v) != INVALID_VERTEX_ID;
 	}
 };
-
-#if 0
-template<class vertex_type>
-class graph_index_impl: public graph_index
-{
-	// This contains the vertices with edges.
-	std::vector<vertex_type> vertices;
-	size_t min_vertex_size;
-
-	graph_index_impl(const std::string &index_file) {
-		vertex_index *index = load_vertex_index(index_file);
-		this->min_vertex_size = get_min_ext_mem_vertex_size(
-				index->get_graph_header().get_graph_type());
-		size_t num_vertices = index->get_num_vertices();
-		size_t num_non_empty = 0;
-		vertices.resize(num_vertices);
-		for (size_t i = 0; i < num_vertices; i++) {
-			vertices[i] = vertex_type(i, index);
-			if (vertices[i].get_ext_mem_size() > min_vertex_size) {
-				num_non_empty++;
-			}
-		}
-		printf("There are %ld vertices and %ld non-empty, vertex array capacity: %ld\n",
-				num_vertices, num_non_empty, vertices.capacity());
-		vertex_index::destroy(index);
-	}
-public:
-	static graph_index *create(const std::string &index_file) {
-		return new graph_index_impl<vertex_type>(index_file);
-	}
-
-	virtual compute_vertex &get_vertex(vertex_id_t id) {
-		return vertices[id];
-	}
-
-	virtual size_t get_num_vertices() const {
-		return vertices.size();
-	}
-
-	virtual vertex_id_t get_max_vertex_id() const {
-		return vertices.back().get_id();
-	}
-
-	virtual vertex_id_t get_min_vertex_id() const {
-		return vertices.front().get_id();
-	}
-};
-#endif
-
 }
 
 #endif
