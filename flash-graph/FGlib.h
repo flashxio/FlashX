@@ -319,15 +319,18 @@ std::vector<vertex_id_t> get_degree(FG_graph::ptr fg, edge_type type);
   * \return A vector with an entry for each vertex in the graph's
   *         transitivity value.
 */
-std::vector<vertex_id_t> compute_transitivity(FG_graph::ptr fg);
+// TODO
+std::vector<float> compute_transitivity(FG_graph::ptr fg);// {
+    //throw std::runtime_error("Transitivity not yet implemented");
+//}
 
 /**
-  * \brief Compute the betweeenness centrality of a graph.
+  * \brief Compute the betweenness centrality of a graph.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
   * \param vids The vertex IDs for which BC should be computed
   * \return A vector with an entry for each vertex in the graph's
-  *         betweennesss centrality value.
+  *         betweenness centrality value.
 */
 std::vector<float> compute_betweenness_centrality(FG_graph::ptr fg,
 		const std::vector<vertex_id_t>& vids);
@@ -398,7 +401,7 @@ std::vector<double> compute_closeness_centrality(FG_graph::ptr fg,
   * \param traverse_e The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
   * \param memopt Optimize for minimal memory rather than performance.
   * \return A vector with an entry for each vertex in the graph's
-  *         closeness centrality value.
+  *         diversity value.
 */
 std::vector<float> compute_diversity(FG_graph::ptr fg,
         edge_type traverse_e=OUT_EDGE, bool memopt=false);

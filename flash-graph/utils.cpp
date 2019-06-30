@@ -2714,7 +2714,8 @@ native_large_writer::native_large_writer(const std::string &file)
 	file_name = file;
 	fd = open(file.c_str(), O_WRONLY | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR | S_IRGRP);
 	if (fd < 0) {
-        std::cerr << "fail to open " << file << ":" <<  errno << std::endl;
+        std::cerr << "native_large_writer: fail to open " << file << " . ERR: "
+            <<  errno << std::endl;
 		exit(1);
 	}
 
@@ -2730,7 +2731,8 @@ class native_large_reader: public large_reader
 	native_large_reader(const std::string &file) {
 		f = fopen(file.c_str(), "r");
 		if (f == NULL) {
-            std::cerr << "fail to open " << file << ":" << errno << std::endl;
+            std::cerr << "native_large_reader: fail to open " << file
+                << " . ERR: " <<  errno << std::endl;
 			exit(1);
 		}
 	}

@@ -34,6 +34,18 @@ class CGraph {
         bool min_vertex_id_set;
         vertex_id_t min_vertex_id;
 
+        edge_type str2edge(const std::string& etype) {
+            if (etype == "in")
+                return IN_EDGE;
+            else if (etype == "out")
+                return OUT_EDGE;
+            else if (etype == "both")
+                return BOTH_EDGES;
+
+            throw std::runtime_error(std::string("Unknown edge type '") +
+                    etype + std::string("'"));
+        }
+
     public:
         CGraph() { }
         CGraph(std::string graph_file, std::string index_file,
@@ -85,17 +97,44 @@ class CGraph {
             return compute_betweenness_centrality(graph, ids);
         }
 
+        // Closeness Centrality
+        std::vector<double> closeness(std::vector<vertex_id_t>& ids,
+                const std::string& etype="both") {
+
+            if (ids.empty()) {
+                for (vertex_id_t id = 0; id < vcount(); id++) {
+                    ids.push_back(id);
+                }
+            }
+            return compute_closeness_centrality(graph, ids, str2edge(etype));
+        }
+
+        // Diversity
+        std::vector<float> diversity(
+                const std::string& etype="out", bool memopt=false) {
+            if (etype == "both")
+                throw std::runtime_error("Only 'in' and 'out' edges supported!");
+
+            return compute_diversity(graph, str2edge(etype), memopt);
+        }
+
+        // Topological sort
+        std::vector<vertex_id_t> topo_sort(bool approx=true) {
+            return compute_topo_sort(graph, approx);
+        }
+
+        // TODO: Clustering coefficient
+        //std::vector<float> transitivity() {
+            //return compute_transitivity(graph);
+        //}
+
+        std::vector<unsigned> louvain(const uint32_t levels) {
+            return compute_louvain(graph, levels);
+        }
+
         // Degree
         std::vector<vertex_id_t> degree(const std::string& etype="both") {
-            edge_type type;
-            if (etype == "in")
-                type = IN_EDGE;
-            else if (etype == "out")
-                type = OUT_EDGE;
-            else
-                type = BOTH_EDGES;
-
-            return get_degree(graph, type);
+            return get_degree(graph, str2edge(etype));
         }
 
         // Triangle counting
@@ -176,18 +215,12 @@ class CGraph {
         // bfs
         size_t bfs_vcount(vertex_id_t start_vertex=INVALID_VERTEX_ID,
                 const std::string edge_type_str="both") {
-            auto edge = edge_type::BOTH_EDGES;
-
-            if (edge_type_str == "in")
-                edge = edge_type::IN_EDGE;
-            else if (edge_type_str == "out")
-                edge = edge_type::OUT_EDGE;
 
             if (start_vertex == INVALID_VERTEX_ID ||
                     start_vertex >= vcount())
                 start_vertex = random() % vcount() - 1;
 
-            return bfs(graph, start_vertex, edge);
+            return bfs(graph, start_vertex, str2edge(edge_type_str));
         }
 
         std::string to_str() {
