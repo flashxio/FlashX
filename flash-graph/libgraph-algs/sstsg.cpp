@@ -347,7 +347,7 @@ std::vector<float> compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-    printf("Scan statistics starts, start: %f, interval: %f, #interval: %d\n",
+    printf("Scan statistics starts, start: %ld, interval: %ld, #interval: %d\n",
             timestamp, time_interval, num_time_intervals);
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

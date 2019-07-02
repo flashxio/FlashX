@@ -1855,7 +1855,10 @@ std::unique_ptr<char[]> text_graph_file_io::read_edge_list_text(
 
 	// The line buffer must end with '\0'.
 	char *line_buf = new char[read_bytes + 1];
-	assert(fread(line_buf, read_bytes, 1, f) == 1);
+	auto nread = fread(line_buf, read_bytes, 1, f);
+    if (nread != 1)
+        throw std::runtime_error("Failure to read\n");
+
 	line_buf[read_bytes] = 0;
 
 	return std::unique_ptr<char[]>(line_buf);

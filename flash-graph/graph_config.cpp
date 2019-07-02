@@ -53,7 +53,7 @@ void graph_config::print()
 	printf("\tthreads: %d\n", num_threads);
 	printf("\tprof_file: %s\n", prof_file.c_str());
 	printf("\ttrace_file: %s\n", trace_file.c_str());
-	printf("\tmax_processing_vertices: %d\n", max_proceessing_vertices);
+	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
     printf("\tenable_elevator: %d\n", (int)enable_elevator);
 	printf("\tpart_range_size_log: %d\n", part_range_size_log);
 	printf("\tpreload: %d\n", (int)_preload);
@@ -75,7 +75,7 @@ void graph_config::init(config_map::ptr map)
 		num_threads = 1 << (int) ceil(log2(num_threads));
 	}
 #endif
-	printf("FlashGraph runs on %d threads and nodes\n", num_threads,
+	printf("FlashGraph runs on: %d threads and nodes: %d\n", num_threads,
         safs::params.get_num_nodes());
 	if (!power2(num_threads))
 		throw conf_exception("The number of worker threads has to be 2^n");
