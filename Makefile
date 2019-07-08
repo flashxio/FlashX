@@ -1,7 +1,7 @@
-# Copyright 2014 Open Connectome Project (http;//openconnecto.me)
+# Copyright 2019 Open Connectome Project (http;//openconnecto.me)
 # Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of SAFSlib.
+# This file is part of SAFSlib and FlashGraph.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
