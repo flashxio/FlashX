@@ -21,7 +21,7 @@
 #include "../../../../libkcommon/io.hpp"
 #include "knors_index.h"
 
-namespace kbase = knor::base;
+namespace clustercore = knor::core;
 namespace knor { namespace utils {
 
 format_converter::format_converter(const std::string infile,
@@ -48,7 +48,7 @@ void format_converter::write(const std::string outfile,
     switch (inlayout) {
         case TEXT:
             {
-                kbase::text_reader<double> rdr(infile);
+                clustercore::text_reader<double> rdr(infile);
                 rdr.set_ncol(this->get_ncol());
                 if (outlayout == BIN_RM) {
                     std::cout << "Reading text, writing binary" << std::endl;
@@ -78,7 +78,7 @@ void format_converter::write(const std::string outfile,
         case SEM:
         case BIN_RM:
             {
-                kbase::bin_rm_reader<double> rdr(infile);
+                clustercore::bin_rm_reader<double> rdr(infile);
                 rdr.set_ncol(this->get_ncol());
 
                 if (inlayout == SEM) {

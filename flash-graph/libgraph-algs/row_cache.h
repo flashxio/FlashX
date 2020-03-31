@@ -33,7 +33,7 @@
 #include "../../../../libkcommon/util.hpp"
 #include "../../../../libkcommon/io.hpp"
 
-namespace kbase = knor::base;
+namespace clustercore = knor::core;
 
 namespace {
     template <typename T>
@@ -105,7 +105,7 @@ namespace {
 
                     for (; it != pt_data[thd].end(); ++it) {
                         printf("row: %u ==> ", it->first);
-                        kbase::print<T>(it->second);
+                        clustercore::print<T>(it->second);
                     }
                 }
             }
@@ -208,7 +208,7 @@ namespace {
                 for (cache_map_iter it = data_map.begin(); it != data_map.end();
                         ++it) {
                     printf("r:%u ==> ", it->first);
-                    kbase::print(it->second, elem_len);
+                    clustercore::print(it->second, elem_len);
                 }
             }
 

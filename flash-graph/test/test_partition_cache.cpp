@@ -88,7 +88,8 @@ int main(int argc, char* argv[]) {
             unsigned thd_id = omp_get_thread_num();
             double* lookup = cache->get(rid, thd_id);
             if (lookup) {
-                BOOST_VERIFY(kbase::eq_all<double>(&data[rid*ncol], lookup, ncol));
+                BOOST_VERIFY(clustercore::eq_all<double>(
+                            &data[rid*ncol], lookup, ncol));
             }
         }
 
